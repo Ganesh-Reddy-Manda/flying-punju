@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100" width="120" height="100">
+  <defs>
+    <!-- Gradients for realistic battle rooster look -->
+    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="40%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+    <linearGradient id="combGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ef4444" />
+      <stop offset="100%" stop-color="#991b1b" />
+    </linearGradient>
+    <linearGradient id="wingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+    <linearGradient id="glassGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1f2937" />
+      <stop offset="100%" stop-color="#111827" />
+    </linearGradient>
+  </defs>
+
+  <!-- Tail Feathers (Fierce fighter cock tail) -->
+  <path d="M 25 55 C 5 45 -5 20 15 15 C 22 25 24 38 32 50 Z" fill="#991b1b" stroke="#7f1d1d" stroke-width="2"/>
+  <path d="M 28 60 C 2 60 -10 35 18 28 C 26 38 28 48 35 55 Z" fill="#b45309" stroke="#78350f" stroke-width="2"/>
+  <path d="M 30 65 C 10 75 0 55 22 42 C 30 48 32 56 38 62 Z" fill="#047857" stroke="#065f46" stroke-width="2"/>
+
+  <!-- Main Body -->
+  <ellipse cx="60" cy="60" rx="30" ry="24" fill="url(#bodyGrad)" stroke="#78350f" stroke-width="2.5" />
+
+  <!-- Rooster Neck & Head -->
+  <path d="M 68 50 C 70 35 78 28 90 28 C 98 28 102 38 98 52 C 92 62 82 66 68 50 Z" fill="url(#bodyGrad)" stroke="#78350f" stroke-width="2.5"/>
+
+  <!-- Punju Crown / Comb (Fierce mass spikes) -->
+  <path d="M 78 28 C 76 15 82 12 85 20 C 88 10 95 8 96 18 C 99 9 106 11 104 24 C 100 28 92 30 85 30 Z" fill="url(#combGrad)" stroke="#7f1d1d" stroke-width="2"/>
+
+  <!-- Beak -->
+  <polygon points="98,34 116,40 98,46" fill="#facc15" stroke="#ca8a04" stroke-width="2"/>
+
+  <!-- Wattle (under beak) -->
+  <path d="M 94 46 C 96 58 88 60 86 52 Z" fill="url(#combGrad)" stroke="#7f1d1d" stroke-width="1.5"/>
+
+  <!-- Balayya Style Mass Aviator Sunglasses -->
+  <!-- Left frame/bridge -->
+  <rect x="76" y="32" width="22" height="12" rx="3" fill="url(#glassGrad)" stroke="#fbbf24" stroke-width="1.8"/>
+  <line x1="72" y1="35" x2="76" y2="35" stroke="#fbbf24" stroke-width="2"/>
+  <!-- Sunglasses reflection glare -->
+  <line x1="79" y1="34" x2="84" y2="42" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round"/>
+  <line x1="86" y1="34" x2="90" y2="42" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Military Bandolier (Bullets belt across chest - PUBG style) -->
+  <path d="M 50 42 Q 62 60 76 74" stroke="#451a03" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <!-- Golden bullet tips on strap -->
+  <circle cx="53" cy="46" r="2" fill="#facc15" />
+  <circle cx="58" cy="53" r="2" fill="#facc15" />
+  <circle cx="64" cy="60" r="2" fill="#facc15" />
+  <circle cx="70" cy="67" r="2" fill="#facc15" />
+
+  <!-- Fighter Wing (Positioned for flap animation) -->
+  <path id="punjuWing" d="M 45 52 C 45 42 62 45 72 56 C 70 68 55 76 42 68 C 38 60 45 54 45 52 Z" fill="url(#wingGrad)" stroke="#78350f" stroke-width="2"/>
+  <!-- Wing Feather Details -->
+  <path d="M 52 56 Q 60 62 68 60" stroke="#92400e" stroke-width="1.5" fill="none"/>
+  <path d="M 48 62 Q 56 68 64 66" stroke="#92400e" stroke-width="1.5" fill="none"/>
+
+  <!-- Strong Fighter Claws (Tucked back while flying) -->
+  <path d="M 52 78 L 48 88 L 43 92 M 48 88 L 48 93 M 48 88 L 54 92" stroke="#ca8a04" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 64 78 L 60 88 L 56 92 M 60 88 L 60 93 M 60 88 L 66 92" stroke="#ca8a04" stroke-width="2.5" stroke-linecap="round"/>
+</svg>
