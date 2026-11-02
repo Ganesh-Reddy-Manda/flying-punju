@@ -142,14 +142,18 @@ export class GameEngine {
   }
 
   private loop = (currentTime: number) => {
-    const rawDt = (currentTime - this.lastTime) / 1000;
-    this.lastTime = currentTime;
-    const dt = Math.min(rawDt, 0.1); // prevent physics teleport on tab unfocus
+    try {
+      const rawDt = (currentTime - this.lastTime) / 1000;
+      this.lastTime = currentTime;
+      const dt = Math.min(rawDt, 0.1); // prevent physics teleport on tab unfocus
 
-    if (this.state === 'PLAYING' || this.state === 'IDLE') {
-      this.update(dt);
+      if (this.state === 'PLAYING' || this.state === 'IDLE') {
+        this.update(dt);
+      }
+      this.render();
+    } catch (err) {
+      console.warn('Game engine loop error caught:', err);
     }
-    this.render();
 
     this.animationFrameId = requestAnimationFrame(this.loop);
   };

@@ -34,8 +34,6 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
   const cropCanvasRef = useRef<HTMLCanvasElement>(null);
   const imageObjRef = useRef<HTMLImageElement | null>(null);
 
-  if (!isOpen) return null;
-
   // Handle Raw Image Upload
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -166,8 +164,10 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
   };
 
   useEffect(() => {
-    renderCropperCanvas();
-  }, [rawImageSrc, zoomScale, panOffset, activeTab]);
+    if (isOpen) {
+      renderCropperCanvas();
+    }
+  }, [isOpen, rawImageSrc, zoomScale, panOffset, activeTab]);
 
   // Pointer drag events for canvas
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -214,6 +214,8 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
   const handleTestSound = (effect: SoundEffect) => {
     audioManager.play(effect);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">

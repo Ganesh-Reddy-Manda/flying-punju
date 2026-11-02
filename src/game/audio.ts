@@ -173,39 +173,44 @@ class AudioManager {
    */
   public play(effect: SoundEffect) {
     if (this.isMuted) return;
-    this.initContext();
+    try {
+      this.initContext();
 
-    // Check if a custom audio element exists and is loaded
-    const custom = this.customSounds[effect];
-    if (custom) {
-      try {
-        const clone = custom.cloneNode(true) as HTMLAudioElement;
-        clone.volume = this.volume;
-        clone.play().catch(() => {
-          // Fallback to synth if play promise is rejected
-          this.playSynthesized(effect);
-        });
-        return;
-      } catch {
-        // Fallback to synth
+      // Check if a custom audio element exists and is loaded
+      const custom = this.customSounds[effect];
+      if (custom) {
+        try {
+          const clone = custom.cloneNode(true) as HTMLAudioElement;
+          clone.volume = this.volume;
+          clone.play().catch(() => {
+            // Fallback to synth if play promise is rejected
+            this.playSynthesized(effect);
+          });
+          return;
+        } catch {
+          // Fallback to synth
+        }
       }
-    }
 
-    // Default: Procedural Web Audio Synth
-    this.playSynthesized(effect);
+      // Default: Procedural Web Audio Synth
+      this.playSynthesized(effect);
+    } catch (e) {
+      console.warn('Audio playback safely skipped:', e);
+    }
   }
 
   /**
    * Procedural Web Audio Synthesizer (Zero asset dependency)
    */
   private playSynthesized(effect: SoundEffect) {
-    if (!this.ctx || this.isMuted) return;
-    const now = this.ctx.currentTime;
-    const masterGain = this.ctx.createGain();
-    masterGain.gain.setValueAtTime(this.volume, now);
-    masterGain.connect(this.ctx.destination);
+    try {
+      if (!this.ctx || this.isMuted) return;
+      const now = this.ctx.currentTime;
+      const masterGain = this.ctx.createGain();
+      masterGain.gain.setValueAtTime(this.volume, now);
+      masterGain.connect(this.ctx.destination);
 
-    switch (effect) {
+      switch (effect) {
       case 'start': {
         // Dramatic battlefield horn fanfare + Rooster crow opening sound
         const freqs = [196, 261.63, 329.63, 392, 523.25];
@@ -414,6 +419,9 @@ class AudioManager {
         });
         break;
       }
+    }
+    } catch (e) {
+      console.warn('Synth playback caught error:', e);
     }
   }
 }
