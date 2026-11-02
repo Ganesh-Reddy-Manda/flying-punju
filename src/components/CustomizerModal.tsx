@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { X, Upload, Play, CheckCircle, HelpCircle, Eye, RefreshCw, Music } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Upload, Play, CheckCircle, Eye, RefreshCw, Music, Shield, Zap, Flame, Award, Crosshair, ZoomIn } from 'lucide-react';
 import { audioManager, SoundEffect } from '../game/audio';
 
 interface CustomizerModalProps {
@@ -19,29 +19,192 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
   debugHitbox,
   onToggleDebugHitbox,
 }) => {
-  const [characterPreview, setCharacterPreview] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'character' | 'sounds' | 'powers'>('character');
   const [uploadedSounds, setUploadedSounds] = useState<Record<string, boolean>>({});
-  const [activeTab, setActiveTab] = useState<'character' | 'sounds' | 'guide'>('character');
+  
+  // Image & Circular Cropper State
+  const [rawImageSrc, setRawImageSrc] = useState<string | null>(null);
+  const [zoomScale, setZoomScale] = useState<number>(1.0);
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [cropSuccess, setCropSuccess] = useState<boolean>(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cropCanvasRef = useRef<HTMLCanvasElement>(null);
+  const imageObjRef = useRef<HTMLImageElement | null>(null);
 
   if (!isOpen) return null;
 
+  // Handle Raw Image Upload
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const url = URL.createObjectURL(file);
-      setCharacterPreview(url);
-      onCustomSpriteLoaded(url);
+      setRawImageSrc(url);
+      setZoomScale(1.0);
+      setPanOffset({ x: 0, y: 0 });
+
+      const img = new Image();
+      img.src = url;
+      img.onload = () => {
+        imageObjRef.current = img;
+        generateAndApplyCroppedSprite(img, 1.0, 0, 0);
+      };
     }
   };
 
+  // Re-render the interactive cropper canvas with green line
+  const renderCropperCanvas = () => {
+    const canvas = cropCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+    const radius = 54; // Green circular hitbox preview
+
+    ctx.clearRect(0, 0, w, h);
+
+    // 1. Dark checkboard or background
+    ctx.fillStyle = '#18181b';
+    ctx.fillRect(0, 0, w, h);
+
+    // 2. Draw user's image if present, or default battle rooster
+    if (imageObjRef.current) {
+      const img = imageObjRef.current;
+      const aspect = img.width / img.height;
+      let drawW = radius * 2.2 * zoomScale;
+      let drawH = drawW / aspect;
+
+      ctx.save();
+      ctx.drawImage(
+        img,
+        cx - drawW / 2 + panOffset.x,
+        cy - drawH / 2 + panOffset.y,
+        drawW,
+        drawH
+      );
+      ctx.restore();
+    } else {
+      // Guide icon if no image uploaded yet
+      ctx.fillStyle = '#71717a';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Default Punju', cx, cy - 8);
+      ctx.fillText('(Upload to customize)', cx, cy + 10);
+    }
+
+    // 3. Dark mask outside the green circular boundary
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+    ctx.beginPath();
+    ctx.rect(0, 0, w, h);
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2, true); // subtract circle
+    ctx.fill();
+
+    // 4. Bright Glowing Green Hitbox Guideline Line
+    ctx.strokeStyle = '#22c55e';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#22c55e';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Crosshairs
+    ctx.strokeStyle = 'rgba(34, 197, 94, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(cx - radius, cy);
+    ctx.lineTo(cx + radius, cy);
+    ctx.moveTo(cx, cy - radius);
+    ctx.lineTo(cx, cy + radius);
+    ctx.stroke();
+
+    ctx.restore();
+  };
+
+  // Generate clean circular cropped PNG data URL (everything outside green line is transparent)
+  const generateAndApplyCroppedSprite = (
+    img: HTMLImageElement,
+    scale: number,
+    offX: number,
+    offY: number
+  ) => {
+    const offscreen = document.createElement('canvas');
+    const size = 120;
+    offscreen.width = size;
+    offscreen.height = size;
+    const octx = offscreen.getContext('2d');
+    if (!octx) return;
+
+    const cx = size / 2;
+    const cy = size / 2;
+    const radius = 54;
+
+    // Circular clipping mask: guarantees 100% transparency outside green line
+    octx.beginPath();
+    octx.arc(cx, cy, radius, 0, Math.PI * 2);
+    octx.closePath();
+    octx.clip();
+
+    const aspect = img.width / img.height;
+    let drawW = radius * 2.2 * scale;
+    let drawH = drawW / aspect;
+
+    octx.drawImage(img, cx - drawW / 2 + offX, cy - drawH / 2 + offY, drawW, drawH);
+
+    const croppedDataUrl = offscreen.toDataURL('image/png');
+    onCustomSpriteLoaded(croppedDataUrl);
+    setCropSuccess(true);
+    setTimeout(() => setCropSuccess(false), 2000);
+  };
+
+  useEffect(() => {
+    renderCropperCanvas();
+  }, [rawImageSrc, zoomScale, panOffset, activeTab]);
+
+  // Pointer drag events for canvas
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!imageObjRef.current) return;
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDragging) return;
+    const newX = e.clientX - dragStart.x;
+    const newY = e.clientY - dragStart.y;
+    setPanOffset({ x: newX, y: newY });
+  };
+
+  const handlePointerUp = () => {
+    if (isDragging && imageObjRef.current) {
+      setIsDragging(false);
+      generateAndApplyCroppedSprite(imageObjRef.current, zoomScale, panOffset.x, panOffset.y);
+    }
+  };
+
+  const handleZoomChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const scale = parseFloat(e.target.value);
+    setZoomScale(scale);
+    if (imageObjRef.current) {
+      generateAndApplyCroppedSprite(imageObjRef.current, scale, panOffset.x, panOffset.y);
+    }
+  };
+
+  // Sound uploads
   const handleSoundUpload = (type: SoundEffect | 'bgm', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const url = URL.createObjectURL(file);
       audioManager.setCustomAudio(type, url);
       setUploadedSounds((prev) => ({ ...prev, [type]: true }));
-      // Play a quick test
       if (type !== 'bgm') {
         audioManager.play(type as SoundEffect);
       }
@@ -54,14 +217,14 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-amber-500/40 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-amber-500/40 rounded-2xl w-full max-w-lg max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/60">
           <div>
             <h3 className="font-['Black_Ops_One',sans-serif] text-xl text-amber-400 tracking-wide">
-              CUSTOMIZER STUDIO
+              CUSTOMIZER & GAME GUIDE
             </h3>
-            <p className="text-zinc-400 text-xs">Swap characters & sounds for your Vercel deployment</p>
+            <p className="text-zinc-400 text-xs">Crop your character, test sounds & learn game powers</p>
           </div>
           <button
             onClick={onClose}
@@ -75,65 +238,99 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
         <div className="grid grid-cols-3 border-b border-zinc-800 bg-zinc-950 text-xs font-bold">
           <button
             onClick={() => setActiveTab('character')}
-            className={`py-3 text-center transition-colors border-b-2 ${
+            className={`py-3 text-center transition-colors border-b-2 flex items-center justify-center gap-1.5 ${
               activeTab === 'character'
                 ? 'border-amber-400 text-amber-400 bg-zinc-900/50'
                 : 'border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            🐓 Character Sprite
+            <Crosshair className="w-3.5 h-3.5" />
+            <span>Character Cropper</span>
           </button>
           <button
             onClick={() => setActiveTab('sounds')}
-            className={`py-3 text-center transition-colors border-b-2 ${
+            className={`py-3 text-center transition-colors border-b-2 flex items-center justify-center gap-1.5 ${
               activeTab === 'sounds'
                 ? 'border-amber-400 text-amber-400 bg-zinc-900/50'
                 : 'border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            🎵 Custom Sounds
+            <Music className="w-3.5 h-3.5" />
+            <span>Custom Sounds</span>
           </button>
           <button
-            onClick={() => setActiveTab('guide')}
-            className={`py-3 text-center transition-colors border-b-2 ${
-              activeTab === 'guide'
+            onClick={() => setActiveTab('powers')}
+            className={`py-3 text-center transition-colors border-b-2 flex items-center justify-center gap-1.5 ${
+              activeTab === 'powers'
                 ? 'border-amber-400 text-amber-400 bg-zinc-900/50'
                 : 'border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            🚀 Vercel / GitHub
+            <Award className="w-3.5 h-3.5" />
+            <span>How to Play & Powers</span>
           </button>
         </div>
 
         {/* Tab Contents */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm">
-          {/* TAB 1: CHARACTER SPRITE */}
+        <div className="p-5 overflow-y-auto space-y-5 flex-1 text-sm">
+          {/* TAB 1: CHARACTER CROPPER WITH GREEN HITBOX GUIDELINE */}
           {activeTab === 'character' && (
             <div className="space-y-4">
-              <div className="bg-zinc-800/40 border border-zinc-700/60 rounded-xl p-4 flex items-center justify-center flex-col">
-                <div className="relative w-28 h-28 bg-zinc-900 border-2 border-dashed border-amber-500/50 rounded-2xl flex items-center justify-center overflow-hidden shadow-inner">
-                  {characterPreview ? (
-                    <img
-                      src={characterPreview}
-                      alt="Custom Punju"
-                      className="w-20 h-20 object-contain animate-bounce"
-                    />
-                  ) : (
-                    <img
-                      src={`${import.meta.env.BASE_URL || '/'}assets/character.svg`}
-                      alt="Default Punju"
-                      className="w-20 h-20 object-contain animate-bounce"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
-                      }}
-                    />
+              {/* Interactive Cropper Box */}
+              <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 flex flex-col items-center">
+                <div className="flex items-center justify-between w-full mb-2">
+                  <span className="text-zinc-300 font-bold text-xs flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-ping inline-block" />
+                    Green Line Hitbox Preview
+                  </span>
+                  {cropSuccess && (
+                    <span className="text-green-400 text-[11px] font-bold animate-pulse">
+                      ✓ Auto-Cropped to Circle!
+                    </span>
                   )}
                 </div>
-                <div className="mt-3 text-center">
-                  <span className="text-zinc-300 font-semibold text-xs">
-                    {characterPreview ? 'Custom Sprite Active' : 'Default Battle Punju Active'}
-                  </span>
+
+                {/* Canvas Cropper */}
+                <div className="relative rounded-2xl overflow-hidden border-2 border-zinc-700/80 shadow-2xl cursor-grab active:cursor-grabbing">
+                  <canvas
+                    ref={cropCanvasRef}
+                    width={180}
+                    height={180}
+                    className="touch-none select-none block bg-zinc-950"
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerLeave={handlePointerUp}
+                  />
                 </div>
+
+                <p className="text-[11px] text-zinc-400 text-center mt-2">
+                  <b className="text-green-400">Green Circle:</b> Only what's inside is used. Everything outside is automatically cropped with <b>zero disturbance</b>!
+                </p>
+
+                {/* Zoom & Drag Controls */}
+                {rawImageSrc && (
+                  <div className="w-full mt-3 space-y-2 bg-zinc-800/40 p-2.5 rounded-xl border border-zinc-700/50">
+                    <div className="flex items-center justify-between text-xs text-zinc-300">
+                      <span className="flex items-center gap-1 font-semibold">
+                        <ZoomIn className="w-3.5 h-3.5 text-amber-400" /> Zoom / Scale:
+                      </span>
+                      <span className="font-mono text-amber-400">{zoomScale.toFixed(2)}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.5"
+                      step="0.05"
+                      value={zoomScale}
+                      onChange={handleZoomChange}
+                      className="w-full accent-amber-500 cursor-pointer"
+                    />
+                    <div className="text-[10px] text-zinc-400 text-center">
+                      (Drag image above with mouse or touch to center your character!)
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Upload & Reset Buttons */}
@@ -147,15 +344,16 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
                 />
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 text-xs transition-all shadow-md active:scale-95"
+                  className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 text-xs transition-all shadow-md active:scale-95 uppercase tracking-wide"
                 >
                   <Upload className="w-4 h-4" />
-                  <span>Upload Image</span>
+                  <span>Upload Character</span>
                 </button>
 
                 <button
                   onClick={() => {
-                    setCharacterPreview(null);
+                    setRawImageSrc(null);
+                    imageObjRef.current = null;
                     onResetDefaultSprite();
                   }}
                   className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 text-xs transition-all border border-zinc-700 active:scale-95"
@@ -165,11 +363,11 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
                 </button>
               </div>
 
-              {/* Hitbox Debug Toggle */}
+              {/* In-Game Hitbox Overlay Toggle */}
               <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-3 flex items-center justify-between">
                 <div>
-                  <div className="font-bold text-xs text-zinc-200">Show Collision Hitbox</div>
-                  <div className="text-[11px] text-zinc-400">Green circle to verify your character's boundaries</div>
+                  <div className="font-bold text-xs text-zinc-200">Show In-Game Hitbox Circle</div>
+                  <div className="text-[11px] text-zinc-400">Renders the green line around Punju while playing</div>
                 </div>
                 <button
                   onClick={onToggleDebugHitbox}
@@ -186,7 +384,7 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: SOUND EFFECTS */}
+          {/* TAB 2: SOUND EFFECTS (INCLUDING OPENING SOUND) */}
           {activeTab === 'sounds' && (
             <div className="space-y-3">
               <p className="text-zinc-400 text-xs">
@@ -194,10 +392,12 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
               </p>
 
               {[
-                { key: 'flap', name: 'Flap / Jump', desc: 'rooster flutter / whoosh' },
-                { key: 'point', name: 'Pass Obstacle / Point', desc: 'PUBG golden coin chime' },
-                { key: 'hit', name: 'Hit Obstacle / Frying Pan', desc: 'classic pan CLANG' },
-                { key: 'powerup', name: 'Power-up Pickup', desc: 'Airdrop flare siren' },
+                { key: 'start', name: 'Opening / Game Launch', desc: 'battlefield match start horn & rooster crow' },
+                { key: 'flap', name: 'Flap / Jump', desc: 'wing flutter / whoosh' },
+                { key: 'point', name: 'Pass Obstacle / Point', desc: 'golden coin chime' },
+                { key: 'hit', name: 'Hit Obstacle / Frying Pan', desc: 'classic PUBG pan CLANG' },
+                { key: 'shieldBreak', name: 'Level 3 Shield Shatter', desc: 'helmet armor crack sound' },
+                { key: 'powerup', name: 'Power-up Pickup', desc: 'airdrop flare pickup siren' },
                 { key: 'rage', name: 'Rage Mode / Flare Gun', desc: 'Balayya mass blast' },
               ].map((s) => (
                 <div
@@ -261,51 +461,116 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: VERCEL & GITHUB DEPLOYMENT GUIDE */}
-          {activeTab === 'guide' && (
-            <div className="space-y-4 text-xs text-zinc-300 leading-relaxed">
+          {/* TAB 3: HOW TO PLAY & WHAT PROVIDES WHAT POWER */}
+          {activeTab === 'powers' && (
+            <div className="space-y-3.5 text-xs text-zinc-300">
+              {/* Core Goal */}
               <div className="bg-amber-950/40 border border-amber-500/30 rounded-xl p-3">
-                <div className="font-bold text-amber-400 flex items-center gap-1.5 mb-1 text-sm">
-                  <HelpCircle className="w-4 h-4" />
-                  <span>How to Permanently Replace Assets</span>
+                <div className="font-bold text-amber-400 text-sm mb-1 flex items-center gap-1.5">
+                  <span>🎯 Mission Objective</span>
                 </div>
-                <p className="text-zinc-300">
-                  When you upload files above, they work immediately in your browser. To make them permanent for your live Vercel link:
+                <p className="text-zinc-200 leading-relaxed">
+                  Help <b>Punju</b> survive the Erangel battleground! Dodge sniper watchtowers and flying frying pans to claim your <b>Winner Winner Chicken Dinner</b>!
                 </p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="font-bold text-zinc-200">1. Replace Character:</div>
-                <div className="bg-zinc-900 p-2.5 rounded-lg border border-zinc-800 font-mono text-[11px] text-amber-300">
-                  public/assets/character.png
+                <div className="mt-2 text-zinc-400 text-[11px]">
+                  Controls: <b>Tap Screen</b>, <b>Click</b>, or press <b>SPACE / UP ARROW</b> to fly!
                 </div>
-                <p className="text-zinc-400">
-                  Save your desired Punju / Balayya PNG image into this path in your repository.
-                </p>
               </div>
 
+              {/* Power-up Cards */}
               <div className="space-y-2">
-                <div className="font-bold text-zinc-200">2. Replace Custom Sounds:</div>
-                <p className="text-zinc-400">
-                  Drop your MP3 files into <code className="text-amber-300 font-mono">public/assets/sounds/</code>:
-                </p>
-                <ul className="list-disc list-inside space-y-1 text-zinc-400 font-mono text-[11px]">
-                  <li>flap.mp3 (wing flap / Balayya dialogue)</li>
-                  <li>hit.mp3 (collision sound)</li>
-                  <li>point.mp3 (score chime)</li>
-                  <li>powerup.mp3 (airdrop sound)</li>
-                  <li>bgm.mp3 (looping music)</li>
-                </ul>
-              </div>
+                {/* 1. Level 3 Helmet */}
+                <div className="bg-zinc-900/90 border border-sky-500/40 rounded-xl p-3 flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-sky-950/80 border border-sky-400/60 flex items-center justify-center shrink-0 text-lg">
+                    🪖
+                  </div>
+                  <div>
+                    <div className="font-bold text-sky-400 text-xs flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5" />
+                      <span>Level 3 Spetsnaz Helmet (Life Shield)</span>
+                    </div>
+                    <p className="text-zinc-300 text-[11px] mt-0.5 leading-normal">
+                      Absorbs <b>1 fatal collision</b> with any tower or frying pan! The helmet shatters with metallic armor debris, grants <b>1.2s invulnerability</b>, and saves your life!
+                    </p>
+                  </div>
+                </div>
 
-              <div className="space-y-2">
-                <div className="font-bold text-zinc-200">3. Push to GitHub & Deploy to Vercel:</div>
-                <pre className="bg-zinc-900 p-2.5 rounded-lg border border-zinc-800 font-mono text-[11px] text-zinc-300 overflow-x-auto">
-                  git add .&#10;git commit -m "Update custom Punju character & sounds"&#10;git push origin main
-                </pre>
-                <p className="text-zinc-400">
-                  Vercel will automatically rebuild and deploy your updated game in seconds!
-                </p>
+                {/* 2. Energy Drink */}
+                <div className="bg-zinc-900/90 border border-amber-500/40 rounded-xl p-3 flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-950/80 border border-amber-400/60 flex items-center justify-center shrink-0 text-lg">
+                    ⚡
+                  </div>
+                  <div>
+                    <div className="font-bold text-amber-400 text-xs flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>PUBG Energy Drink (2X Score & Magnet)</span>
+                    </div>
+                    <p className="text-zinc-300 text-[11px] mt-0.5 leading-normal">
+                      Lasts <b>8 seconds</b>. Doubles all score points from passing towers and creates an electric <b>magnetic field</b> that pulls nearby golden corn snacks straight to you!
+                    </p>
+                  </div>
+                </div>
+
+                {/* 3. Flare Gun */}
+                <div className="bg-zinc-900/90 border border-red-500/40 rounded-xl p-3 flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-red-950/80 border border-red-500 flex items-center justify-center shrink-0 text-lg">
+                    🔫
+                  </div>
+                  <div>
+                    <div className="font-bold text-red-400 text-xs flex items-center gap-1.5">
+                      <Flame className="w-3.5 h-3.5" />
+                      <span>Flare Gun / Punju Rage Mode (Invincible Smash)</span>
+                    </div>
+                    <p className="text-zinc-300 text-[11px] mt-0.5 leading-normal">
+                      Lasts <b>5.5 seconds</b>. Turns Punju into a fiery missile! Smashes and <b>explodes sniper towers and pans into pieces</b> on contact with awesome screen shake!
+                    </p>
+                  </div>
+                </div>
+
+                {/* 4. Golden Corn */}
+                <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 text-lg">
+                    🌽
+                  </div>
+                  <div>
+                    <div className="font-bold text-yellow-300 text-xs">
+                      Golden Battle Corn (+2 Points)
+                    </div>
+                    <p className="text-zinc-300 text-[11px] mt-0.5 leading-normal">
+                      Floating grain snacks in the battleground. Collect them to rack up your score faster!
+                    </p>
+                  </div>
+                </div>
+
+                {/* 5. Frying Pan */}
+                <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 text-lg">
+                    🍳
+                  </div>
+                  <div>
+                    <div className="font-bold text-zinc-200 text-xs">
+                      PUBG Cast-Iron Frying Pan (Hazard)
+                    </div>
+                    <p className="text-zinc-400 text-[11px] mt-0.5 leading-normal">
+                      Hovering bouncing obstacle in the middle of the gap. Steer clear or smash it using Flare Gun Rage!
+                    </p>
+                  </div>
+                </div>
+
+                {/* 6. Mass Near-Miss */}
+                <div className="bg-zinc-900/90 border border-orange-500/30 rounded-xl p-3 flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-orange-950/80 border border-orange-500/50 flex items-center justify-center shrink-0 text-lg">
+                    💥
+                  </div>
+                  <div>
+                    <div className="font-bold text-orange-400 text-xs">
+                      Balayya "MASS NEAR-MISS!" Combos
+                    </div>
+                    <p className="text-zinc-300 text-[11px] mt-0.5 leading-normal">
+                      Glide within <b>18px</b> of obstacle edges without hitting them to trigger <b>MASS COMBO (1x to 5x)</b> and massive bonus points!
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -315,9 +580,9 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
         <div className="px-6 py-3 border-t border-zinc-800 bg-zinc-900/60 flex justify-end">
           <button
             onClick={onClose}
-            className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black px-5 py-2 rounded-xl text-xs uppercase tracking-wider transition-all"
+            className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black px-5 py-2 rounded-xl text-xs uppercase tracking-wider transition-all shadow-md active:scale-95"
           >
-            Done / Close
+            Done / Play Game
           </button>
         </div>
       </div>

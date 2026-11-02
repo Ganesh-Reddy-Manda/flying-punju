@@ -97,9 +97,9 @@ export class GameEngine {
     if (this.state === 'IDLE') {
       this.state = 'PLAYING';
       this.callbacks.onStateChange(this.state);
+      audioManager.play('start');
       audioManager.startBGM();
       this.player.flap(this.particles);
-      audioManager.play('flap');
     } else if (this.state === 'PLAYING') {
       this.player.flap(this.particles);
       audioManager.play('flap');
@@ -136,9 +136,9 @@ export class GameEngine {
     this.callbacks.onScoreUpdate(this.score, this.highScore, this.combo);
     this.callbacks.onPowerupUpdate(false, 0, 0);
 
+    audioManager.play('start');
     audioManager.startBGM();
     this.player.flap(this.particles);
-    audioManager.play('flap');
   }
 
   private loop = (currentTime: number) => {

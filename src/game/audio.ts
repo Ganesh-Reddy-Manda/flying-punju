@@ -7,6 +7,7 @@
  */
 
 export type SoundEffect =
+  | 'start'
   | 'flap'
   | 'point'
   | 'nearMiss'
@@ -59,6 +60,7 @@ class AudioManager {
   private attemptLoadDefaultCustomSounds() {
     const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/';
     const soundFiles: Record<string, SoundEffect> = {
+      [`${baseUrl}assets/sounds/start.mp3`]: 'start',
       [`${baseUrl}assets/sounds/flap.mp3`]: 'flap',
       [`${baseUrl}assets/sounds/point.mp3`]: 'point',
       [`${baseUrl}assets/sounds/hit.mp3`]: 'hit',
@@ -204,6 +206,44 @@ class AudioManager {
     masterGain.connect(this.ctx.destination);
 
     switch (effect) {
+      case 'start': {
+        // Dramatic battlefield horn fanfare + Rooster crow opening sound
+        const freqs = [196, 261.63, 329.63, 392, 523.25];
+        freqs.forEach((freq, idx) => {
+          if (!this.ctx) return;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+          osc.frequency.exponentialRampToValueAtTime(freq * 1.5, now + idx * 0.08 + 0.2);
+
+          gain.gain.setValueAtTime(0.24, now + idx * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.08 + 0.3);
+
+          osc.connect(gain);
+          gain.connect(masterGain);
+          osc.start(now + idx * 0.08);
+          osc.stop(now + idx * 0.08 + 0.3);
+        });
+
+        // Rooster crow overtone
+        const crow = this.ctx.createOscillator();
+        const crowGain = this.ctx.createGain();
+        crow.type = 'triangle';
+        crow.frequency.setValueAtTime(450, now + 0.35);
+        crow.frequency.exponentialRampToValueAtTime(800, now + 0.5);
+        crow.frequency.exponentialRampToValueAtTime(350, now + 0.75);
+
+        crowGain.gain.setValueAtTime(0.3, now + 0.35);
+        crowGain.gain.exponentialRampToValueAtTime(0.01, now + 0.75);
+
+        crow.connect(crowGain);
+        crowGain.connect(masterGain);
+        crow.start(now + 0.35);
+        crow.stop(now + 0.75);
+        break;
+      }
+
       case 'flap': {
         // Quick rooster wing whoosh + cluck pitch bend
         const osc = this.ctx.createOscillator();

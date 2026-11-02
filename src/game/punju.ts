@@ -156,9 +156,14 @@ export class PunjuPlayer {
 
   private drawCustomImage(ctx: CanvasRenderingContext2D) {
     if (!this.customImage) return;
-    const w = 58;
-    const h = 48;
-    ctx.drawImage(this.customImage, -w / 2, -h / 2, w, h);
+    const size = this.radius * 2.3;
+    ctx.save();
+    // Automatically clip everything outside the circular hitbox line
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius + 1, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(this.customImage, -size / 2, -size / 2, size, size);
+    ctx.restore();
   }
 
   // High-Detail Procedural "Battle Punju" (Telugu Mass Fighting Rooster)
