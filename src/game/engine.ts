@@ -112,11 +112,11 @@ export class GameEngine {
     if (this.state === 'PLAYING') {
       this.state = 'PAUSED';
       this.callbacks.onStateChange(this.state);
-      audioManager.stopBGM();
+      audioManager.pauseBGM();
     } else if (this.state === 'PAUSED') {
       this.state = 'PLAYING';
       this.callbacks.onStateChange(this.state);
-      audioManager.startBGM();
+      audioManager.resumeBGM();
       this.lastTime = performance.now();
     }
   }
@@ -302,7 +302,8 @@ export class GameEngine {
         this.player.invulnerableTimer = 1.2;
         this.combo = 1;
         this.screenShake = 8;
-        audioManager.play('shieldBreak');
+        // Pause BGM, play shield break sound clearly, and continue BGM after!
+        audioManager.playHitWithBGMPause('shieldBreak', 1300);
         this.particles.spawnExplosion(this.player.x, this.player.y, '#38bdf8', 20);
         this.particles.spawnFloatingText(this.player.x, this.player.y, 'HELMET SAVED YOU!', '#38bdf8');
         return;

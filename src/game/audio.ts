@@ -25,6 +25,10 @@ class AudioManager {
   private customSounds: Partial<Record<SoundEffect, HTMLAudioElement>> = {};
   private customBgm: HTMLAudioElement | null = null;
   private isBgmPlaying: boolean = false;
+  private isBgmPaused: boolean = false;
+  private bgmSynthTimer: number | null = null;
+  private bgmSynthStep: number = 0;
+  private pauseTimeoutId: number | null = null;
 
   constructor() {
     // Load mute state from localStorage
@@ -98,11 +102,12 @@ class AudioManager {
       if (this.customBgm) {
         this.customBgm.pause();
       }
+      this.stopProceduralBGM();
       const bgm = new Audio(sourceUrl);
       bgm.loop = true;
       bgm.volume = this.volume * 0.5;
       this.customBgm = bgm;
-      if (this.isBgmPlaying && !this.isMuted) {
+      if (this.isBgmPlaying && !this.isMuted && !this.isBgmPaused) {
         bgm.play().catch(() => {});
       }
       return;
@@ -121,11 +126,16 @@ class AudioManager {
       // Ignore
     }
 
-    if (this.customBgm) {
-      if (this.isMuted) {
+    if (this.isMuted) {
+      if (this.customBgm) {
         this.customBgm.pause();
-      } else if (this.isBgmPlaying) {
+      }
+      this.stopProceduralBGM();
+    } else if (this.isBgmPlaying && !this.isBgmPaused) {
+      if (this.customBgm) {
         this.customBgm.play().catch(() => {});
+      } else {
+        this.startProceduralBGM();
       }
     }
 
@@ -154,17 +164,179 @@ class AudioManager {
 
   public startBGM() {
     this.isBgmPlaying = true;
+    this.isBgmPaused = false;
+    this.initContext();
+
     if (this.customBgm && !this.isMuted) {
       this.customBgm.volume = this.volume * 0.5;
-      this.customBgm.play().catch(() => {});
+      this.customBgm.play().catch(() => {
+        // Fallback to procedural synth BGM if custom file playback blocks
+        this.startProceduralBGM();
+      });
+    } else if (!this.isMuted) {
+      this.startProceduralBGM();
+    }
+  }
+
+  public pauseBGM() {
+    this.isBgmPaused = true;
+    if (this.customBgm && !this.customBgm.paused) {
+      this.customBgm.pause();
+    }
+  }
+
+  public resumeBGM() {
+    if (this.isMuted || !this.isBgmPlaying) return;
+    this.isBgmPaused = false;
+    this.initContext();
+
+    if (this.customBgm) {
+      this.customBgm.volume = this.volume * 0.5;
+      this.customBgm.play().catch(() => {
+        this.startProceduralBGM();
+      });
+    } else if (this.bgmSynthTimer === null) {
+      this.startProceduralBGM();
     }
   }
 
   public stopBGM() {
+    if (this.pauseTimeoutId !== null) {
+      clearTimeout(this.pauseTimeoutId);
+      this.pauseTimeoutId = null;
+    }
     this.isBgmPlaying = false;
+    this.isBgmPaused = false;
     if (this.customBgm) {
       this.customBgm.pause();
       this.customBgm.currentTime = 0;
+    }
+    this.stopProceduralBGM();
+  }
+
+  /**
+   * Play collision / hit sound with background music paused,
+   * then automatically resume background music after the sound finishes!
+   */
+  public playHitWithBGMPause(effect: SoundEffect = 'hit', resumeDelayMs: number = 1300) {
+    if (this.pauseTimeoutId !== null) {
+      clearTimeout(this.pauseTimeoutId);
+      this.pauseTimeoutId = null;
+    }
+
+    // 1. Immediately pause background music so the hit/dialogue sound is loud and clear!
+    this.pauseBGM();
+
+    // 2. Play the hit or shield break sound
+    this.play(effect);
+
+    // 3. If there is a custom audio element for this effect, resume right when it finishes
+    const custom = this.customSounds[effect];
+    if (custom && custom.duration && !isNaN(custom.duration) && custom.duration > 0) {
+      const dur = Math.max(resumeDelayMs, (custom.duration * 1000) + 100);
+      this.pauseTimeoutId = window.setTimeout(() => {
+        this.pauseTimeoutId = null;
+        if (this.isBgmPlaying) {
+          this.resumeBGM();
+        }
+      }, dur);
+    } else {
+      // 4. Fallback timer: resume BGM after resumeDelayMs
+      this.pauseTimeoutId = window.setTimeout(() => {
+        this.pauseTimeoutId = null;
+        if (this.isBgmPlaying) {
+          this.resumeBGM();
+        }
+      }, resumeDelayMs);
+    }
+  }
+
+  /**
+   * Procedural Battle BGM (16-step rhythmic synth loop when no bgm.mp3 is loaded)
+   */
+  private startProceduralBGM() {
+    this.stopProceduralBGM();
+    this.bgmSynthStep = 0;
+    const stepDurationMs = 125; // 120 BPM 16th notes
+
+    this.bgmSynthTimer = window.setInterval(() => {
+      if (this.isMuted || !this.isBgmPlaying || this.isBgmPaused) return;
+      this.playSynthBgmStep(this.bgmSynthStep);
+      this.bgmSynthStep = (this.bgmSynthStep + 1) % 16;
+    }, stepDurationMs);
+  }
+
+  private stopProceduralBGM() {
+    if (this.bgmSynthTimer !== null) {
+      clearInterval(this.bgmSynthTimer);
+      this.bgmSynthTimer = null;
+    }
+  }
+
+  private playSynthBgmStep(step: number) {
+    if (!this.ctx || this.isMuted || this.isBgmPaused) return;
+    try {
+      const now = this.ctx.currentTime;
+      const bgmVol = this.volume * 0.28; // balanced background volume
+
+      // 1. Rhythmic bass pulse
+      const bassNotes = [
+        110, 0, 0, 110,  // A2
+        0, 0, 130.81, 0, // C3
+        98, 0, 110, 0,   // G2, A2
+        82.41, 0, 110, 0 // E2, A2
+      ];
+      const bassFreq = bassNotes[step];
+      if (bassFreq > 0) {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(bassFreq, now);
+
+        gain.gain.setValueAtTime(bgmVol * 0.7, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.18);
+      }
+
+      // 2. Hi-hat / Percussion tick on even steps (2, 6, 10, 14)
+      if (step === 2 || step === 6 || step === 10 || step === 14) {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(step === 6 || step === 14 ? 1100 : 2200, now);
+
+        gain.gain.setValueAtTime(bgmVol * 0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.04);
+      }
+
+      // 3. Ambient Synth Arpeggio on quarter notes (0, 4, 8, 12)
+      if (step % 4 === 0) {
+        const chordNotes = [220, 261.63, 329.63, 392]; // Am7
+        const noteFreq = chordNotes[(step / 4) % chordNotes.length];
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(noteFreq, now);
+
+        gain.gain.setValueAtTime(bgmVol * 0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      }
+    } catch {
+      // Ignore background audio step error
     }
   }
 
