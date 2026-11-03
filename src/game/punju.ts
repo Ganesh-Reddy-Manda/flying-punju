@@ -27,21 +27,36 @@ export class PunjuPlayer {
     this.y = GAME_CONFIG.canvasHeight * 0.42;
 
     const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/';
-    this.attemptLoadCustomSprite(`${baseUrl}assets/character.svg`);
+    this.attemptLoadCustomSprite([
+      `${baseUrl}assets/character.png`,
+      `${baseUrl}assets/character.jpg`,
+      `${baseUrl}assets/character.jpeg`,
+      `${baseUrl}assets/character.webp`,
+      `${baseUrl}assets/character.svg`,
+    ]);
   }
 
-  public attemptLoadCustomSprite(src: string) {
+  public attemptLoadCustomSprite(sources: string | string[]) {
+    const list = Array.isArray(sources) ? [...sources] : [sources];
+    if (list.length === 0) return;
+
+    const current = list[0];
+    const remaining = list.slice(1);
+
     const img = new Image();
-    img.src = src;
+    img.src = current;
     img.onload = () => {
+      // Ignore empty/dummy 1x1 pixels if alternatives exist
+      if (img.width <= 2 && img.height <= 2 && remaining.length > 0) {
+        this.attemptLoadCustomSprite(remaining);
+        return;
+      }
       this.customImage = img;
       this.customImageLoaded = true;
     };
     img.onerror = () => {
-      // If SVG failed, try PNG
-      if (src.endsWith('.svg')) {
-        const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/';
-        this.attemptLoadCustomSprite(`${baseUrl}assets/character.png`);
+      if (remaining.length > 0) {
+        this.attemptLoadCustomSprite(remaining);
       }
     };
   }
