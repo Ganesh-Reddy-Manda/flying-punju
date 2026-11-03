@@ -24,6 +24,7 @@ class AudioManager {
   private volume: number = 0.8;
   private customSounds: Partial<Record<SoundEffect, HTMLAudioElement>> = {};
   private customGameOverSounds: HTMLAudioElement[] = [];
+  private customGameOverTierSounds: Map<number, HTMLAudioElement> = new Map();
   private activeGameOverAudio: HTMLAudioElement | null = null;
   private activeSounds: Set<HTMLAudioElement> = new Set();
   private customBgm: HTMLAudioElement | null = null;
@@ -67,7 +68,7 @@ class AudioManager {
   private attemptLoadDefaultCustomSounds() {
     const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/';
 
-    const loadSingleAudio = (url: string, key?: SoundEffect, isGameOver: boolean = false) => {
+    const loadSingleAudio = (url: string, key?: SoundEffect, isGameOver: boolean = false, tier?: number) => {
       const audio = new Audio();
       audio.preload = 'auto';
 
@@ -79,6 +80,9 @@ class AudioManager {
           this.customSounds[key] = audio;
         }
         if (isGameOver) {
+          if (tier !== undefined) {
+            this.customGameOverTierSounds.set(tier, audio);
+          }
           if (!this.customGameOverSounds.some((a) => a.src === audio.src)) {
             this.customGameOverSounds.push(audio);
           }
@@ -123,10 +127,10 @@ class AudioManager {
       loadSingleAudio(url, key, key === 'gameover');
     });
 
-    // Check for multiple numbered Game Over files: gameover1.mp3 through gameover10.mp3
+    // Check for score-tiered Game Over files: gameover1.mp3 through gameover10.mp3
     for (let i = 1; i <= 10; i++) {
       const gUrl = `${baseUrl}assets/sounds/gameover${i}.mp3`;
-      loadSingleAudio(gUrl, undefined, true);
+      loadSingleAudio(gUrl, undefined, true, i);
     }
 
     const bgmUrl = `${baseUrl}assets/sounds/bgm.mp3`;
@@ -199,7 +203,28 @@ class AudioManager {
 
   public clearCustomGameOverAudios() {
     this.customGameOverSounds = [];
+    this.customGameOverTierSounds.clear();
     delete this.customSounds['gameover'];
+  }
+
+  public setCustomGameOverTierAudio(tier: number, sourceUrl: string) {
+    const audio = new Audio(sourceUrl);
+    audio.preload = 'auto';
+    this.customGameOverTierSounds.set(tier, audio);
+    if (!this.customGameOverSounds.some((a) => a.src === audio.src)) {
+      this.customGameOverSounds.push(audio);
+    }
+    if (!this.customSounds['gameover']) {
+      this.customSounds['gameover'] = audio;
+    }
+  }
+
+  public getGameOverTierStatus(): Record<number, boolean> {
+    const status: Record<number, boolean> = {};
+    for (let t = 1; t <= 4; t++) {
+      status[t] = this.customGameOverTierSounds.has(t);
+    }
+    return status;
   }
 
   /**
@@ -454,6 +479,116 @@ class AudioManager {
   }
 
   /**
+   * Play score-based Game Over audio
+   * - Tier 1: Score < 3 (Early death / less than 3 passes) -> gameover1.mp3
+   * - Tier 2: Score 3 - 9 (Ok-Ok run) -> gameover2.mp3
+   * - Tier 3: Score 10 - 19 (Good survival run) -> gameover3.mp3
+   * - Tier 4: Score 20+ or High Score (Winner Champion) -> gameover4.mp3
+   */
+  public playGameOverByScore(score: number, isNewHighScore: boolean = false, onEnded?: () => void) {
+    if (this.isMuted) {
+      if (onEnded) onEnded();
+      return;
+    }
+
+    // Stop any previous game over audio immediately
+    this.stopGameOverAudio();
+
+    // Determine target tier
+    let targetTier = 1;
+    if (score < 3) {
+      targetTier = 1;
+    } else if (score < 10) {
+      targetTier = 2;
+    } else if (score < 20 && !isNewHighScore) {
+      targetTier = 3;
+    } else {
+      targetTier = 4;
+    }
+
+    // Try finding exact tier audio
+    let chosenAudio = this.customGameOverTierSounds.get(targetTier);
+
+    // If exact tier is not uploaded yet, fallback gracefully down to closest available tier
+    if (!chosenAudio) {
+      for (let t = targetTier; t >= 1; t--) {
+        if (this.customGameOverTierSounds.has(t)) {
+          chosenAudio = this.customGameOverTierSounds.get(t);
+          break;
+        }
+      }
+    }
+
+    // If still not found, check any available tier or general gameover.mp3
+    if (!chosenAudio) {
+      for (let t = 1; t <= 10; t++) {
+        if (this.customGameOverTierSounds.has(t)) {
+          chosenAudio = this.customGameOverTierSounds.get(t);
+          break;
+        }
+      }
+    }
+
+    if (!chosenAudio) {
+      chosenAudio = this.customSounds['gameover'];
+    }
+
+    if (chosenAudio) {
+      try {
+        const clone = chosenAudio.cloneNode(true) as HTMLAudioElement;
+        clone.volume = this.volume;
+        this.activeSounds.add(clone);
+        this.activeGameOverAudio = clone;
+
+        let endedFired = false;
+        const fireEndedOnce = () => {
+          if (!endedFired) {
+            endedFired = true;
+            this.activeSounds.delete(clone);
+            if (this.activeGameOverAudio === clone) {
+              this.activeGameOverAudio = null;
+            }
+            if (onEnded) onEnded();
+          }
+        };
+
+        clone.onended = fireEndedOnce;
+        clone.onerror = fireEndedOnce;
+
+        clone.play().then(() => {
+          if (onEnded && clone.duration && !isNaN(clone.duration) && clone.duration > 0) {
+            setTimeout(fireEndedOnce, (clone.duration * 1000) + 120);
+          }
+        }).catch(() => {
+          fireEndedOnce();
+        });
+        return;
+      } catch {
+        if (onEnded) onEnded();
+        return;
+      }
+    }
+
+    if (onEnded) onEnded();
+  }
+
+  public playGameOverTierTest(tier: number) {
+    let audio = this.customGameOverTierSounds.get(tier) || this.customSounds['gameover'];
+    if (audio) {
+      this.stopGameOverAudio();
+      const clone = audio.cloneNode(true) as HTMLAudioElement;
+      clone.volume = this.volume;
+      this.activeSounds.add(clone);
+      this.activeGameOverAudio = clone;
+      clone.onended = () => {
+        this.activeSounds.delete(clone);
+        if (this.activeGameOverAudio === clone) this.activeGameOverAudio = null;
+      };
+      clone.play().catch(() => {});
+    }
+  }
+
+  /**
    * Play any game sound effect
    */
   public play(effect: SoundEffect, onEnded?: () => void) {
@@ -461,35 +596,27 @@ class AudioManager {
       if (onEnded) onEnded();
       return;
     }
+
+    if (effect === 'gameover') {
+      this.playGameOverByScore(0, false, onEnded);
+      return;
+    }
+
     try {
       this.initContext();
 
-      // If effect is gameover and multiple custom audios exist, randomly select one every time!
-      let custom = this.customSounds[effect];
-      if (effect === 'gameover' && this.customGameOverSounds.length > 0) {
-        const randomIndex = Math.floor(Math.random() * this.customGameOverSounds.length);
-        custom = this.customGameOverSounds[randomIndex];
-      }
-
+      const custom = this.customSounds[effect];
       if (custom) {
         try {
           const clone = custom.cloneNode(true) as HTMLAudioElement;
           clone.volume = this.volume;
           this.activeSounds.add(clone);
 
-          if (effect === 'gameover') {
-            this.stopGameOverAudio();
-            this.activeGameOverAudio = clone;
-          }
-
           let endedFired = false;
           const fireEndedOnce = () => {
             if (!endedFired) {
               endedFired = true;
               this.activeSounds.delete(clone);
-              if (this.activeGameOverAudio === clone) {
-                this.activeGameOverAudio = null;
-              }
               if (onEnded) onEnded();
             }
           };

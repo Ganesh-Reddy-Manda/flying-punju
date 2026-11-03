@@ -22,6 +22,7 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
   const [activeTab, setActiveTab] = useState<'character' | 'sounds' | 'powers'>('character');
   const [uploadedSounds, setUploadedSounds] = useState<Record<string, boolean>>({});
   const [gameOverSoundsCount, setGameOverSoundsCount] = useState<number>(() => audioManager.getGameOverSoundsCount());
+  const [tierStatus, setTierStatus] = useState<Record<number, boolean>>(() => audioManager.getGameOverTierStatus());
   
   // Image & Circular Cropper State
   const [rawImageSrc, setRawImageSrc] = useState<string | null>(null);
@@ -167,6 +168,8 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       renderCropperCanvas();
+      setTierStatus(audioManager.getGameOverTierStatus());
+      setGameOverSoundsCount(audioManager.getGameOverSoundsCount());
     }
   }, [isOpen, rawImageSrc, zoomScale, panOffset, activeTab]);
 
@@ -212,6 +215,17 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
     }
   };
 
+  const handleTierUpload = (tier: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      audioManager.setCustomGameOverTierAudio(tier, url);
+      setTierStatus(audioManager.getGameOverTierStatus());
+      setGameOverSoundsCount(audioManager.getGameOverSoundsCount());
+      audioManager.playGameOverTierTest(tier);
+    }
+  };
+
   const handleMultipleGameOverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
@@ -220,13 +234,15 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
         const url = URL.createObjectURL(file);
         audioManager.addCustomGameOverAudio(url);
       }
+      setTierStatus(audioManager.getGameOverTierStatus());
       setGameOverSoundsCount(audioManager.getGameOverSoundsCount());
-      audioManager.play('gameover');
+      audioManager.playGameOverByScore(0);
     }
   };
 
   const handleClearGameOverSounds = () => {
     audioManager.clearCustomGameOverAudios();
+    setTierStatus({});
     setGameOverSoundsCount(0);
   };
 
@@ -458,61 +474,82 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
                 </div>
               ))}
 
-              {/* Special Card: MULTIPLE RANDOM GAME OVER AUDIOS */}
-              <div className="bg-gradient-to-r from-red-950/40 via-zinc-900/90 to-amber-950/30 border-2 border-amber-500/50 rounded-xl p-3.5 space-y-2.5 shadow-lg mt-3">
+              {/* SCORE-BASED GAME OVER AUDIO TIERS */}
+              <div className="bg-gradient-to-r from-red-950/40 via-zinc-900/90 to-amber-950/30 border-2 border-amber-500/50 rounded-xl p-3.5 space-y-3 shadow-lg mt-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-xl">💀</span>
+                    <span className="text-xl">🏆</span>
                     <div>
                       <div className="font-extrabold text-xs text-amber-400 flex items-center gap-1.5">
-                        <span>Multiple Game Over Audios (Randomized)</span>
+                        <span>Score-Based Game Over Sounds</span>
                         <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-mono border border-amber-500/40">
-                          {gameOverSoundsCount > 0 ? `${gameOverSoundsCount} Custom Clips Loaded` : '3 Built-in Synth Variants'}
+                          {gameOverSoundsCount > 0 ? `${gameOverSoundsCount} Custom Files Active` : 'Waiting for Files'}
                         </span>
                       </div>
                       <p className="text-[11px] text-zinc-300 mt-0.5">
-                        Plays a <b>different random audio every time</b> you die or crash!
+                        Plays audio based on how far you survive (not jumbled):
                       </p>
                     </div>
                   </div>
-                </div>
-
-                <div className="bg-zinc-950/80 p-2 rounded-lg border border-zinc-800 text-[11px] text-zinc-400 font-mono space-y-0.5">
-                  <div className="text-zinc-300 font-bold">📁 Files automatically loaded from:</div>
-                  <div className="text-amber-300">public/assets/sounds/gameover1.mp3</div>
-                  <div className="text-amber-300">public/assets/sounds/gameover2.mp3, gameover3.mp3, etc.</div>
-                </div>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    onClick={() => audioManager.play('gameover')}
-                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow transition-all active:scale-95"
-                  >
-                    <Shuffle className="w-3.5 h-3.5" />
-                    <span>🎲 Test Random Game Over Sound</span>
-                  </button>
-
-                  <label className="cursor-pointer px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors border border-zinc-700 active:scale-95">
-                    <Upload className="w-3.5 h-3.5 text-amber-400" />
-                    <span>➕ Add MP3s</span>
-                    <input
-                      type="file"
-                      accept="audio/*"
-                      multiple
-                      className="hidden"
-                      onChange={handleMultipleGameOverUpload}
-                    />
-                  </label>
 
                   {gameOverSoundsCount > 0 && (
                     <button
                       onClick={handleClearGameOverSounds}
-                      className="p-2 bg-red-950/60 hover:bg-red-900/80 text-red-300 rounded-lg text-xs font-semibold transition-colors border border-red-800/50 flex items-center justify-center"
-                      title="Clear custom clips"
+                      className="p-1.5 bg-red-950/60 hover:bg-red-900/80 text-red-300 rounded-lg text-xs font-semibold transition-colors border border-red-800/50"
+                      title="Clear custom gameover sounds"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   )}
+                </div>
+
+                {/* 4 Score Tiers */}
+                <div className="space-y-2">
+                  {[
+                    { tier: 1, file: 'gameover1.mp3', label: 'Tier 1: Low Score (< 3 passes)', desc: 'Early death / failed run', color: 'text-red-400' },
+                    { tier: 2, file: 'gameover2.mp3', label: 'Tier 2: Ok-Ok Run (3 - 9 passes)', desc: 'Average survival performance', color: 'text-amber-400' },
+                    { tier: 3, file: 'gameover3.mp3', label: 'Tier 3: Good Run (10 - 19 passes)', desc: 'Pochinki fighter cock', color: 'text-sky-400' },
+                    { tier: 4, file: 'gameover4.mp3', label: 'Tier 4: High Score (20+ / Record)', desc: 'Winner Winner Chicken Dinner!', color: 'text-green-400' },
+                  ].map((t) => {
+                    const isLoaded = tierStatus[t.tier];
+                    return (
+                      <div
+                        key={t.tier}
+                        className="bg-zinc-950/80 border border-zinc-800/80 rounded-lg p-2.5 flex items-center justify-between"
+                      >
+                        <div>
+                          <div className={`font-bold text-xs flex items-center gap-1.5 ${t.color}`}>
+                            <span>{t.label}</span>
+                            {isLoaded && <CheckCircle className="w-3.5 h-3.5 text-green-400" />}
+                          </div>
+                          <div className="text-[10px] text-zinc-400 font-mono">
+                            public/assets/sounds/{t.file} &middot; <span className="text-zinc-500">{t.desc}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => audioManager.playGameOverTierTest(t.tier)}
+                            className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-amber-400 transition-colors"
+                            title={`Test ${t.file}`}
+                          >
+                            <Play className="w-3 h-3 fill-amber-400" />
+                          </button>
+
+                          <label className="cursor-pointer px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors border border-zinc-700">
+                            <Upload className="w-2.5 h-2.5" />
+                            <span>Upload</span>
+                            <input
+                              type="file"
+                              accept="audio/*"
+                              className="hidden"
+                              onChange={(e) => handleTierUpload(t.tier, e)}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

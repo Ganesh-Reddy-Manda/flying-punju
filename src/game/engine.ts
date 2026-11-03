@@ -341,9 +341,12 @@ export class GameEngine {
     // Immediately stop background music - completely silent on game over screen
     audioManager.stopBGM();
     audioManager.play('hit');
-    // Offset by 60ms so pan impact sound hits first, followed by the randomized defeat dialogue/audio!
+    const finalScore = this.score;
+    const isNewHigh = this.score > 0 && this.score >= this.highScore;
+
+    // Offset by 60ms so pan impact sound hits first, followed by score-based defeat dialogue!
     setTimeout(() => {
-      audioManager.play('gameover');
+      audioManager.playGameOverByScore(finalScore, isNewHigh);
     }, 60);
     this.particles.spawnExplosion(this.player.x, this.player.y, '#f59e0b', 30);
     this.checkHighScore();
