@@ -51,7 +51,10 @@ export function App() {
 
   const handleResetDefaultSprite = () => {
     const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/';
-    engineRef.current?.player.attemptLoadCustomSprite(`${baseUrl}assets/character.svg`);
+    engineRef.current?.player.attemptLoadCustomSprite([
+      `${baseUrl}assets/character.png?v=${Date.now()}`,
+      `${baseUrl}assets/character.png`,
+    ]);
   };
 
   const handleToggleDebugHitbox = () => {

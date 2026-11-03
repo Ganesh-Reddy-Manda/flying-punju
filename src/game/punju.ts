@@ -27,12 +27,13 @@ export class PunjuPlayer {
     this.y = GAME_CONFIG.canvasHeight * 0.42;
 
     const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/';
+    const cacheBuster = `?v=${Date.now()}`;
     this.attemptLoadCustomSprite([
+      `${baseUrl}assets/character.png${cacheBuster}`,
       `${baseUrl}assets/character.png`,
+      `${baseUrl}assets/character.webp`,
       `${baseUrl}assets/character.jpg`,
       `${baseUrl}assets/character.jpeg`,
-      `${baseUrl}assets/character.webp`,
-      `${baseUrl}assets/character.svg`,
     ]);
   }
 
@@ -171,13 +172,17 @@ export class PunjuPlayer {
 
   private drawCustomImage(ctx: CanvasRenderingContext2D) {
     if (!this.customImage) return;
-    const size = this.radius * 2.3;
+    const aspect = (this.customImage.width || 1) / (this.customImage.height || 1);
+    const baseSize = this.radius * 2.5;
+    let drawW = baseSize;
+    let drawH = baseSize;
+    if (aspect >= 1) {
+      drawH = baseSize / aspect;
+    } else {
+      drawW = baseSize * aspect;
+    }
     ctx.save();
-    // Automatically clip everything outside the circular hitbox line
-    ctx.beginPath();
-    ctx.arc(0, 0, this.radius + 1, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(this.customImage, -size / 2, -size / 2, size, size);
+    ctx.drawImage(this.customImage, -drawW / 2, -drawH / 2, drawW, drawH);
     ctx.restore();
   }
 

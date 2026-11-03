@@ -94,7 +94,7 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
       ctx.fillStyle = '#71717a';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Default Punju', cx, cy - 8);
+      ctx.fillText('Main Hero', cx, cy - 8);
       ctx.fillText('(Upload to customize)', cx, cy + 10);
     }
 
@@ -164,6 +164,18 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
     setCropSuccess(true);
     setTimeout(() => setCropSuccess(false), 2000);
   };
+
+  useEffect(() => {
+    const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/';
+    const img = new Image();
+    img.src = `${baseUrl}assets/character.png?v=${Date.now()}`;
+    img.onload = () => {
+      if (!imageObjRef.current) {
+        imageObjRef.current = img;
+        renderCropperCanvas();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -390,13 +402,19 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
                 <button
                   onClick={() => {
                     setRawImageSrc(null);
-                    imageObjRef.current = null;
+                    const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/';
+                    const img = new Image();
+                    img.src = `${baseUrl}assets/character.png?v=${Date.now()}`;
+                    img.onload = () => {
+                      imageObjRef.current = img;
+                      renderCropperCanvas();
+                    };
                     onResetDefaultSprite();
                   }}
                   className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 text-xs transition-all border border-zinc-700 active:scale-95"
                 >
                   <RefreshCw className="w-4 h-4" />
-                  <span>Reset Default</span>
+                  <span>Reset Hero</span>
                 </button>
               </div>
 
