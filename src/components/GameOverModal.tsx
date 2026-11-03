@@ -107,7 +107,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 text-xs transition-all border border-zinc-700"
             >
               <Palette className="w-4 h-4 text-amber-400" />
-              <span>Customize</span>
+              <span>Game Guide</span>
             </button>
           </div>
         </div>

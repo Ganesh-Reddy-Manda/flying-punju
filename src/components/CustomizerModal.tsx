@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Play, CheckCircle, Eye, RefreshCw, Music, Shield, Zap, Flame, Award, Crosshair, ZoomIn, Shuffle, Trash2 } from 'lucide-react';
+import { X, Upload, Play, CheckCircle, RefreshCw, Music, Shield, Zap, Flame, Award, Crosshair, ZoomIn } from 'lucide-react';
 import { audioManager, SoundEffect } from '../game/audio';
 
 interface CustomizerModalProps {
@@ -7,8 +7,8 @@ interface CustomizerModalProps {
   onClose: () => void;
   onCustomSpriteLoaded: (url: string) => void;
   onResetDefaultSprite: () => void;
-  debugHitbox: boolean;
-  onToggleDebugHitbox: () => void;
+  debugHitbox?: boolean;
+  onToggleDebugHitbox?: () => void;
 }
 
 export const CustomizerModal: React.FC<CustomizerModalProps> = ({
@@ -16,13 +16,8 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
   onClose,
   onCustomSpriteLoaded,
   onResetDefaultSprite,
-  debugHitbox,
-  onToggleDebugHitbox,
 }) => {
   const [activeTab, setActiveTab] = useState<'character' | 'sounds' | 'powers'>('character');
-  const [uploadedSounds, setUploadedSounds] = useState<Record<string, boolean>>({});
-  const [gameOverSoundsCount, setGameOverSoundsCount] = useState<number>(() => audioManager.getGameOverSoundsCount());
-  const [tierStatus, setTierStatus] = useState<Record<number, boolean>>(() => audioManager.getGameOverTierStatus());
   
   // Image & Circular Cropper State
   const [rawImageSrc, setRawImageSrc] = useState<string | null>(null);
@@ -180,8 +175,6 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       renderCropperCanvas();
-      setTierStatus(audioManager.getGameOverTierStatus());
-      setGameOverSoundsCount(audioManager.getGameOverSoundsCount());
     }
   }, [isOpen, rawImageSrc, zoomScale, panOffset, activeTab]);
 
@@ -214,50 +207,6 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
     }
   };
 
-  // Sound uploads
-  const handleSoundUpload = (type: SoundEffect | 'bgm', e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      audioManager.setCustomAudio(type, url);
-      setUploadedSounds((prev) => ({ ...prev, [type]: true }));
-      if (type !== 'bgm') {
-        audioManager.play(type as SoundEffect);
-      }
-    }
-  };
-
-  const handleTierUpload = (tier: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      audioManager.setCustomGameOverTierAudio(tier, url);
-      setTierStatus(audioManager.getGameOverTierStatus());
-      setGameOverSoundsCount(audioManager.getGameOverSoundsCount());
-      audioManager.playGameOverTierTest(tier);
-    }
-  };
-
-  const handleMultipleGameOverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const url = URL.createObjectURL(file);
-        audioManager.addCustomGameOverAudio(url);
-      }
-      setTierStatus(audioManager.getGameOverTierStatus());
-      setGameOverSoundsCount(audioManager.getGameOverSoundsCount());
-      audioManager.playGameOverByScore(0);
-    }
-  };
-
-  const handleClearGameOverSounds = () => {
-    audioManager.clearCustomGameOverAudios();
-    setTierStatus({});
-    setGameOverSoundsCount(0);
-  };
-
   const handleTestSound = (effect: SoundEffect) => {
     audioManager.play(effect);
   };
@@ -271,9 +220,9 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/60">
           <div>
             <h3 className="font-['Black_Ops_One',sans-serif] text-xl text-amber-400 tracking-wide">
-              CUSTOMIZER & GAME GUIDE
+              HERO & GAME GUIDE
             </h3>
-            <p className="text-zinc-400 text-xs">Crop your character, test sounds & learn game powers</p>
+            <p className="text-zinc-400 text-xs">Hero skin, active soundtrack & gameplay powers</p>
           </div>
           <button
             onClick={onClose}
@@ -294,7 +243,7 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
             }`}
           >
             <Crosshair className="w-3.5 h-3.5" />
-            <span>Character Cropper</span>
+            <span>Hero Skin</span>
           </button>
           <button
             onClick={() => setActiveTab('sounds')}
@@ -305,7 +254,7 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
             }`}
           >
             <Music className="w-3.5 h-3.5" />
-            <span>Custom Sounds</span>
+            <span>Soundtrack</span>
           </button>
           <button
             onClick={() => setActiveTab('powers')}
@@ -417,180 +366,130 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
                   <span>Reset Hero</span>
                 </button>
               </div>
-
-              {/* In-Game Hitbox Overlay Toggle */}
-              <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-3 flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-xs text-zinc-200">Show In-Game Hitbox Circle</div>
-                  <div className="text-[11px] text-zinc-400">Renders the green line around Punju while playing</div>
-                </div>
-                <button
-                  onClick={onToggleDebugHitbox}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                    debugHitbox
-                      ? 'bg-green-600 text-white'
-                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <Eye className="w-3.5 h-3.5 inline mr-1" />
-                  {debugHitbox ? 'ON' : 'OFF'}
-                </button>
-              </div>
             </div>
           )}
 
-          {/* TAB 2: SOUND EFFECTS (INCLUDING OPENING SOUND) */}
+          {/* TAB 2: SOUND EFFECTS & SOUNDTRACK */}
           {activeTab === 'sounds' && (
             <div className="space-y-3">
-              <p className="text-zinc-400 text-xs">
-                Test built-in synth sounds or upload custom MP3 files to preview:
-              </p>
-
-              {[
-                { key: 'start', name: 'Opening / Game Launch', desc: 'battlefield match start horn & rooster crow' },
-                { key: 'flap', name: 'Flap / Jump', desc: 'wing flutter / whoosh' },
-                { key: 'point', name: 'Pass Obstacle / Point', desc: 'golden coin chime' },
-                { key: 'hit', name: 'Hit Obstacle / Frying Pan', desc: 'classic PUBG pan CLANG' },
-                { key: 'shieldBreak', name: 'Level 3 Shield Shatter', desc: 'helmet armor crack sound' },
-                { key: 'powerup', name: 'Power-up Pickup', desc: 'airdrop flare pickup siren' },
-                { key: 'rage', name: 'Rage Mode / Flare Gun', desc: 'Balayya mass blast' },
-              ].map((s) => (
-                <div
-                  key={s.key}
-                  className="bg-zinc-900/70 border border-zinc-800 rounded-xl p-3 flex items-center justify-between"
-                >
-                  <div>
-                    <div className="font-bold text-xs text-zinc-200 flex items-center gap-1.5">
-                      <span>{s.name}</span>
-                      {uploadedSounds[s.key] && (
-                        <CheckCircle className="w-3.5 h-3.5 text-green-400" />
-                      )}
-                    </div>
-                    <div className="text-[11px] text-zinc-400 font-mono">public/assets/sounds/{s.key}.mp3</div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleTestSound(s.key as SoundEffect)}
-                      className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-amber-400 transition-colors"
-                      title="Play Sound"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-amber-400" />
-                    </button>
-
-                    <label className="cursor-pointer px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors border border-zinc-700">
-                      <Upload className="w-3 h-3" />
-                      <span>Test MP3</span>
-                      <input
-                        type="file"
-                        accept="audio/*"
-                        className="hidden"
-                        onChange={(e) => handleSoundUpload(s.key as SoundEffect, e)}
-                      />
-                    </label>
-                  </div>
-                </div>
-              ))}
-
-              {/* SCORE-BASED GAME OVER AUDIO TIERS */}
-              <div className="bg-gradient-to-r from-red-950/40 via-zinc-900/90 to-amber-950/30 border-2 border-amber-500/50 rounded-xl p-3.5 space-y-3 shadow-lg mt-3">
+              {/* Active Soundtracks Overview */}
+              <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3.5 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-xl">🏆</span>
-                    <div>
-                      <div className="font-extrabold text-xs text-amber-400 flex items-center gap-1.5">
-                        <span>Score-Based Game Over Sounds</span>
-                        <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-mono border border-amber-500/40">
-                          {gameOverSoundsCount > 0 ? `${gameOverSoundsCount} Custom Files Active` : 'Waiting for Files'}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-zinc-300 mt-0.5">
-                        Plays audio based on how far you survive (not jumbled):
-                      </p>
-                    </div>
+                    <Music className="w-4 h-4 text-amber-400" />
+                    <span className="font-extrabold text-xs text-amber-400 uppercase tracking-wide">
+                      Active Game Soundtrack
+                    </span>
                   </div>
+                  <span className="text-[11px] bg-green-500/20 text-green-400 px-2.5 py-0.5 rounded-full font-bold border border-green-500/30 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> Ready
+                  </span>
+                </div>
+                <p className="text-zinc-400 text-xs">
+                  All custom songs and dynamic score-based defeat dialogues are loaded and active.
+                </p>
+              </div>
 
-                  {gameOverSoundsCount > 0 && (
-                    <button
-                      onClick={handleClearGameOverSounds}
-                      className="p-1.5 bg-red-950/60 hover:bg-red-900/80 text-red-300 rounded-lg text-xs font-semibold transition-colors border border-red-800/50"
-                      title="Clear custom gameover sounds"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+              {/* Soundtrack Elements */}
+              <div className="space-y-2">
+                <div className="bg-zinc-900/70 border border-zinc-800 rounded-xl p-3 flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-xs text-zinc-200 flex items-center gap-1.5">
+                      <span>Battle Background Music (BGM)</span>
+                      <CheckCircle className="w-3.5 h-3.5 text-green-400" />
+                    </div>
+                    <div className="text-[11px] text-zinc-400">High-energy Erangel battlefield music</div>
+                  </div>
+                  <button
+                    onClick={() => handleTestSound('start')}
+                    className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-amber-400 transition-colors"
+                    title="Play Match Start Audio"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-amber-400" />
+                  </button>
+                </div>
+
+                <div className="bg-zinc-900/70 border border-zinc-800 rounded-xl p-3 flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-xs text-zinc-200 flex items-center gap-1.5">
+                      <span>Jump / Wing Flap</span>
+                      <CheckCircle className="w-3.5 h-3.5 text-green-400" />
+                    </div>
+                    <div className="text-[11px] text-zinc-400">Dynamic flap sound effect</div>
+                  </div>
+                  <button
+                    onClick={() => handleTestSound('flap')}
+                    className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-amber-400 transition-colors"
+                    title="Play Flap Sound"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-amber-400" />
+                  </button>
+                </div>
+
+                <div className="bg-zinc-900/70 border border-zinc-800 rounded-xl p-3 flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-xs text-zinc-200 flex items-center gap-1.5">
+                      <span>Rage Mode / Flare Gun</span>
+                      <CheckCircle className="w-3.5 h-3.5 text-green-400" />
+                    </div>
+                    <div className="text-[11px] text-zinc-400">High-power rampage music & sound</div>
+                  </div>
+                  <button
+                    onClick={() => handleTestSound('rage')}
+                    className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-amber-400 transition-colors"
+                    title="Play Rage Sound"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-amber-400" />
+                  </button>
+                </div>
+              </div>
+
+              {/* SCORE-BASED GAME OVER DIALOGUE TIERS */}
+              <div className="bg-gradient-to-r from-red-950/40 via-zinc-900/90 to-amber-950/30 border border-amber-500/40 rounded-xl p-3.5 space-y-2.5 shadow-lg mt-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🏆</span>
+                  <div>
+                    <div className="font-extrabold text-xs text-amber-400">
+                      Score-Based Game Over Dialogues
+                    </div>
+                    <p className="text-[11px] text-zinc-400">
+                      Automatically selects audio based on obstacles survived:
+                    </p>
+                  </div>
                 </div>
 
                 {/* 4 Score Tiers */}
                 <div className="space-y-2">
                   {[
-                    { tier: 1, file: 'gameover1.mp3', label: 'Tier 1: Low Score (< 3 passes)', desc: 'Early death / failed run', color: 'text-red-400' },
-                    { tier: 2, file: 'gameover2.mp3', label: 'Tier 2: Ok-Ok Run (3 - 9 passes)', desc: 'Average survival performance', color: 'text-amber-400' },
-                    { tier: 3, file: 'gameover3.mp3', label: 'Tier 3: Good Run (10 - 19 passes)', desc: 'Pochinki fighter cock', color: 'text-sky-400' },
-                    { tier: 4, file: 'gameover4.mp3', label: 'Tier 4: High Score (20+ / Record)', desc: 'Winner Winner Chicken Dinner!', color: 'text-green-400' },
-                  ].map((t) => {
-                    const isLoaded = tierStatus[t.tier];
-                    return (
-                      <div
-                        key={t.tier}
-                        className="bg-zinc-950/80 border border-zinc-800/80 rounded-lg p-2.5 flex items-center justify-between"
-                      >
-                        <div>
-                          <div className={`font-bold text-xs flex items-center gap-1.5 ${t.color}`}>
-                            <span>{t.label}</span>
-                            {isLoaded && <CheckCircle className="w-3.5 h-3.5 text-green-400" />}
-                          </div>
-                          <div className="text-[10px] text-zinc-400 font-mono">
-                            public/assets/sounds/{t.file} &middot; <span className="text-zinc-500">{t.desc}</span>
-                          </div>
+                    { tier: 1, label: 'Tier 1: Low Score (< 3 passes)', desc: 'Early crash dialogue', color: 'text-red-400' },
+                    { tier: 2, label: 'Tier 2: Ok-Ok Run (3 - 9 passes)', desc: 'Average survival performance', color: 'text-amber-400' },
+                    { tier: 3, label: 'Tier 3: Good Run (10 - 19 passes)', desc: 'Fighter cock Pochinki performance', color: 'text-sky-400' },
+                    { tier: 4, label: 'Tier 4: Champion (20+ / High Score)', desc: 'Winner Winner Chicken Dinner!', color: 'text-green-400' },
+                  ].map((t) => (
+                    <div
+                      key={t.tier}
+                      className="bg-zinc-950/80 border border-zinc-800/80 rounded-lg p-2.5 flex items-center justify-between"
+                    >
+                      <div>
+                        <div className={`font-bold text-xs flex items-center gap-1.5 ${t.color}`}>
+                          <span>{t.label}</span>
+                          <CheckCircle className="w-3 h-3 text-green-400" />
                         </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => audioManager.playGameOverTierTest(t.tier)}
-                            className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-amber-400 transition-colors"
-                            title={`Test ${t.file}`}
-                          >
-                            <Play className="w-3 h-3 fill-amber-400" />
-                          </button>
-
-                          <label className="cursor-pointer px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors border border-zinc-700">
-                            <Upload className="w-2.5 h-2.5" />
-                            <span>Upload</span>
-                            <input
-                              type="file"
-                              accept="audio/*"
-                              className="hidden"
-                              onChange={(e) => handleTierUpload(t.tier, e)}
-                            />
-                          </label>
+                        <div className="text-[10px] text-zinc-400">
+                          {t.desc}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
 
-              {/* Background Music Slot */}
-              <div className="bg-zinc-900/70 border border-zinc-800 rounded-xl p-3 flex items-center justify-between mt-2">
-                <div>
-                  <div className="font-bold text-xs text-zinc-200 flex items-center gap-1.5">
-                    <Music className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Battle Background Music (BGM)</span>
-                  </div>
-                  <div className="text-[11px] text-zinc-400 font-mono">public/assets/sounds/bgm.mp3</div>
+                      <button
+                        onClick={() => audioManager.playGameOverTierTest(t.tier)}
+                        className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-amber-400 transition-colors"
+                        title={`Listen to ${t.label}`}
+                      >
+                        <Play className="w-3 h-3 fill-amber-400" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-
-                <label className="cursor-pointer px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors border border-zinc-700">
-                  <Upload className="w-3 h-3" />
-                  <span>Test BGM</span>
-                  <input
-                    type="file"
-                    accept="audio/*"
-                    className="hidden"
-                    onChange={(e) => handleSoundUpload('bgm', e)}
-                  />
-                </label>
               </div>
             </div>
           )}

@@ -44,10 +44,10 @@ export const HUD: React.FC<HUDProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-2">
-          {/* Customizer / Skin Button */}
+          {/* Game Guide Button */}
           <button
             onClick={onOpenCustomizer}
-            title="Customize Character & Sounds"
+            title="Game Guide & Powers"
             className="w-10 h-10 rounded-full bg-zinc-900/80 backdrop-blur-md border border-zinc-700/60 flex items-center justify-center text-zinc-200 hover:text-amber-400 hover:scale-105 active:scale-95 transition-all shadow-lg"
           >
             <Palette className="w-5 h-5" />

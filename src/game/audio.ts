@@ -227,6 +227,10 @@ class AudioManager {
     return status;
   }
 
+  public hasSound(effect: SoundEffect): boolean {
+    return !!this.customSounds[effect];
+  }
+
   /**
    * Immediately stops any currently playing Game Over dialogue or defeat sound
    */
@@ -240,6 +244,16 @@ class AudioManager {
       }
       this.activeGameOverAudio = null;
     }
+    // Also clean any active clones to avoid hanging voices
+    this.activeSounds.forEach((audio) => {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {
+        // Ignore
+      }
+    });
+    this.activeSounds.clear();
   }
 
   /**
@@ -350,7 +364,7 @@ class AudioManager {
    * Play collision / hit sound with background music paused,
    * then automatically resume background music AFTER the sound completely finishes!
    */
-  public playHitWithBGMPause(effect: SoundEffect = 'hit', fallbackDelayMs: number = 1300) {
+  public playHitWithBGMPause(effect: SoundEffect = 'hit', fallbackDelayMs: number = 4500) {
     if (this.pauseTimeoutId !== null) {
       clearTimeout(this.pauseTimeoutId);
       this.pauseTimeoutId = null;
@@ -378,10 +392,10 @@ class AudioManager {
       resumeOnce();
     });
 
-    // 3. Fallback safety timer in case onended doesn't fire
+    // 3. Generous safety timer only if onended fails to trigger
     const custom = this.customSounds[effect];
     const estimatedDur = (custom && custom.duration && !isNaN(custom.duration) && custom.duration > 0)
-      ? (custom.duration * 1000) + 150
+      ? (custom.duration * 1000) + 350
       : fallbackDelayMs;
 
     this.pauseTimeoutId = window.setTimeout(() => {
@@ -486,13 +500,14 @@ class AudioManager {
    * - Tier 4: Score 20+ or High Score (Winner Champion) -> gameover4.mp3
    */
   public playGameOverByScore(score: number, isNewHighScore: boolean = false, onEnded?: () => void) {
+    // 1. Immediately ensure BGM and all other effects are stopped dead
+    this.stopBGM();
+    this.stopGameOverAudio();
+
     if (this.isMuted) {
       if (onEnded) onEnded();
       return;
     }
-
-    // Stop any previous game over audio immediately
-    this.stopGameOverAudio();
 
     // Determine target tier
     let targetTier = 1;

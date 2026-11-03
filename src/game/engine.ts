@@ -43,6 +43,7 @@ export class GameEngine {
   private lastTime: number = 0;
   private animationFrameId: number | null = null;
   private gameOverTimestamp: number = 0;
+  private gameOverTimeoutId: number | null = null;
   private callbacks: GameEngineCallbacks;
 
   constructor(canvas: HTMLCanvasElement, callbacks: GameEngineCallbacks) {
@@ -126,6 +127,11 @@ export class GameEngine {
   }
 
   public restart() {
+    if (this.gameOverTimeoutId !== null) {
+      clearTimeout(this.gameOverTimeoutId);
+      this.gameOverTimeoutId = null;
+    }
+
     this.state = 'PLAYING';
     this.score = 0;
     this.combo = 1;
@@ -258,8 +264,8 @@ export class GameEngine {
           this.triggerMeme('ROOSTER RAMPAGE!');
           break;
         case 'corn':
-          this.score += 2;
-          this.particles.spawnFloatingText(item.x, item.y, '+2 CORN', '#facc15');
+          this.score += 1;
+          this.particles.spawnFloatingText(item.x, item.y, '+1 CORN', '#facc15');
           this.checkHighScore();
           this.callbacks.onScoreUpdate(this.score, this.highScore, this.combo);
           break;
@@ -270,16 +276,13 @@ export class GameEngine {
     if (collision.nearMiss) {
       this.combo = Math.min(5, this.combo + 1);
       audioManager.play('nearMiss');
-      const bonus = 5 * this.combo;
-      this.score += bonus;
       this.particles.spawnFloatingText(
         this.player.x + 20,
         this.player.y - 15,
-        `MASS! x${this.combo}`,
+        `MASS COMBO x${this.combo}!`,
         '#f97316'
       );
       this.triggerMeme('THIGH SLAP MASS!');
-      this.checkHighScore();
       this.callbacks.onScoreUpdate(this.score, this.highScore, this.combo);
     }
 
@@ -335,19 +338,35 @@ export class GameEngine {
   }
 
   private triggerGameOver() {
+    if (this.state === 'GAMEOVER') return;
     this.state = 'GAMEOVER';
     this.gameOverTimestamp = performance.now();
     this.screenShake = 14;
-    // Immediately stop background music - completely silent on game over screen
+
+    if (this.gameOverTimeoutId !== null) {
+      clearTimeout(this.gameOverTimeoutId);
+      this.gameOverTimeoutId = null;
+    }
+
+    // Immediately stop background music & any in-flight sound effects
     audioManager.stopBGM();
-    audioManager.play('hit');
+    audioManager.stopAllSounds();
+
     const finalScore = this.score;
     const isNewHigh = this.score > 0 && this.score >= this.highScore;
 
-    // Offset by 60ms so pan impact sound hits first, followed by score-based defeat dialogue!
-    setTimeout(() => {
+    // If custom hit sound exists, play it first, then transition smoothly to game over dialogue
+    if (audioManager.hasSound('hit')) {
+      audioManager.play('hit', () => {
+        if (this.state === 'GAMEOVER') {
+          audioManager.playGameOverByScore(finalScore, isNewHigh);
+        }
+      });
+    } else {
+      // Play score-tiered Game Over dialogue immediately
       audioManager.playGameOverByScore(finalScore, isNewHigh);
-    }, 60);
+    }
+
     this.particles.spawnExplosion(this.player.x, this.player.y, '#f59e0b', 30);
     this.checkHighScore();
     this.callbacks.onStateChange(this.state);

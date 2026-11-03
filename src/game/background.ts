@@ -66,22 +66,22 @@ export class ParallaxBackground {
 
   private drawClouds(ctx: CanvasRenderingContext2D) {
     ctx.save();
-    ctx.fillStyle = 'rgba(254, 215, 170, 0.25)'; // Soft warm clouds
+    // Subtle horizontal battlefield atmospheric haze (no circular sun shapes)
+    ctx.fillStyle = 'rgba(203, 213, 225, 0.12)';
 
-    const clouds = [
-      { x: 30 - this.cloudScroll, y: 50, r: 24 },
-      { x: 180 - this.cloudScroll, y: 90, r: 35 },
-      { x: 360 - this.cloudScroll, y: 40, r: 20 },
-      { x: 30 + this.width - this.cloudScroll, y: 50, r: 24 },
-      { x: 180 + this.width - this.cloudScroll, y: 90, r: 35 },
-      { x: 360 + this.width - this.cloudScroll, y: 40, r: 20 },
+    const wisps = [
+      { x: 20 - this.cloudScroll * 0.7, y: 45, w: 90, h: 10 },
+      { x: 190 - this.cloudScroll * 0.7, y: 75, w: 120, h: 12 },
+      { x: 340 - this.cloudScroll * 0.7, y: 35, w: 80, h: 8 },
+      { x: 20 + this.width - this.cloudScroll * 0.7, y: 45, w: 90, h: 10 },
+      { x: 190 + this.width - this.cloudScroll * 0.7, y: 75, w: 120, h: 12 },
+      { x: 340 + this.width - this.cloudScroll * 0.7, y: 35, w: 80, h: 8 },
     ];
 
-    for (const c of clouds) {
+    for (const w of wisps) {
       ctx.beginPath();
-      ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
-      ctx.arc(c.x + c.r * 0.7, c.y - 6, c.r * 0.8, 0, Math.PI * 2);
-      ctx.arc(c.x + c.r * 1.3, c.y, c.r * 0.7, 0, Math.PI * 2);
+      // Draw smooth elongated horizontal atmospheric bands
+      ctx.roundRect ? ctx.roundRect(w.x, w.y, w.w, w.h, 6) : ctx.rect(w.x, w.y, w.w, w.h);
       ctx.fill();
     }
     ctx.restore();
