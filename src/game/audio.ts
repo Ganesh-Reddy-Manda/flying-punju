@@ -64,6 +64,49 @@ class AudioManager {
   // Attempt to preload custom MP3s from public/assets/sounds/
   private attemptLoadDefaultCustomSounds() {
     const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/';
+
+    const loadSingleAudio = (url: string, key?: SoundEffect, isGameOver: boolean = false) => {
+      const audio = new Audio();
+      audio.preload = 'auto';
+
+      let registered = false;
+      const registerAudio = () => {
+        if (registered) return;
+        registered = true;
+        if (key) {
+          this.customSounds[key] = audio;
+        }
+        if (isGameOver) {
+          if (!this.customGameOverSounds.some((a) => a.src === audio.src)) {
+            this.customGameOverSounds.push(audio);
+          }
+          if (!this.customSounds['gameover']) {
+            this.customSounds['gameover'] = audio;
+          }
+        }
+      };
+
+      audio.addEventListener('canplay', registerAudio);
+      audio.addEventListener('canplaythrough', registerAudio);
+      audio.addEventListener('loadeddata', registerAudio);
+      audio.addEventListener('loadedmetadata', registerAudio);
+      audio.src = url;
+      audio.load();
+
+      // Also probe via fetch to register immediately upon HTTP 200 OK
+      try {
+        fetch(url, { method: 'HEAD' })
+          .then((res) => {
+            if (res.ok && res.status === 200) {
+              registerAudio();
+            }
+          })
+          .catch(() => {});
+      } catch {
+        // Ignore
+      }
+    };
+
     const soundFiles: Record<string, SoundEffect> = {
       [`${baseUrl}assets/sounds/start.mp3`]: 'start',
       [`${baseUrl}assets/sounds/flap.mp3`]: 'flap',
@@ -75,39 +118,38 @@ class AudioManager {
     };
 
     Object.entries(soundFiles).forEach(([url, key]) => {
-      const audio = new Audio(url);
-      audio.preload = 'auto';
-      audio.oncanplaythrough = () => {
-        this.customSounds[key] = audio;
-        if (key === 'gameover' && !this.customGameOverSounds.some((a) => a.src === audio.src)) {
-          this.customGameOverSounds.push(audio);
-        }
-      };
-      audio.onerror = () => {
-        // Custom sound not found, will smoothly fall back to Web Audio synth
-      };
+      loadSingleAudio(url, key, key === 'gameover');
     });
 
     // Check for multiple numbered Game Over files: gameover1.mp3 through gameover10.mp3
     for (let i = 1; i <= 10; i++) {
       const gUrl = `${baseUrl}assets/sounds/gameover${i}.mp3`;
-      const gAudio = new Audio(gUrl);
-      gAudio.preload = 'auto';
-      gAudio.oncanplaythrough = () => {
-        if (!this.customGameOverSounds.some((a) => a.src === gAudio.src)) {
-          this.customGameOverSounds.push(gAudio);
-        }
-      };
+      loadSingleAudio(gUrl, undefined, true);
     }
 
-    const bgm = new Audio(`${baseUrl}assets/sounds/bgm.mp3`);
+    const bgmUrl = `${baseUrl}assets/sounds/bgm.mp3`;
+    const bgm = new Audio();
+    bgm.preload = 'auto';
     bgm.loop = true;
-    bgm.oncanplaythrough = () => {
+    const registerBgm = () => {
       this.customBgm = bgm;
     };
-    bgm.onerror = () => {
-      this.customBgm = null;
-    };
+    bgm.addEventListener('canplay', registerBgm);
+    bgm.addEventListener('canplaythrough', registerBgm);
+    bgm.addEventListener('loadeddata', registerBgm);
+    bgm.src = bgmUrl;
+    bgm.load();
+    try {
+      fetch(bgmUrl, { method: 'HEAD' })
+        .then((res) => {
+          if (res.ok && res.status === 200) {
+            registerBgm();
+          }
+        })
+        .catch(() => {});
+    } catch {
+      // Ignore
+    }
   }
 
   /**
