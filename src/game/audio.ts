@@ -216,9 +216,9 @@ class AudioManager {
 
   /**
    * Play collision / hit sound with background music paused,
-   * then automatically resume background music after the sound finishes!
+   * then automatically resume background music AFTER the sound completely finishes!
    */
-  public playHitWithBGMPause(effect: SoundEffect = 'hit', resumeDelayMs: number = 1300) {
+  public playHitWithBGMPause(effect: SoundEffect = 'hit', fallbackDelayMs: number = 1300) {
     if (this.pauseTimeoutId !== null) {
       clearTimeout(this.pauseTimeoutId);
       this.pauseTimeoutId = null;
@@ -227,28 +227,34 @@ class AudioManager {
     // 1. Immediately pause background music so the hit/dialogue sound is loud and clear!
     this.pauseBGM();
 
-    // 2. Play the hit or shield break sound
-    this.play(effect);
+    let hasResumed = false;
+    const resumeOnce = () => {
+      if (hasResumed) return;
+      hasResumed = true;
+      if (this.pauseTimeoutId !== null) {
+        clearTimeout(this.pauseTimeoutId);
+        this.pauseTimeoutId = null;
+      }
+      // ONLY resume if the match is still actively PLAYING (never resume on game over)!
+      if (this.isBgmPlaying && this.isBgmPaused && !this.isMuted) {
+        this.resumeBGM();
+      }
+    };
 
-    // 3. If there is a custom audio element for this effect, resume right when it finishes
+    // 2. Play the sound and hook its onended callback
+    this.play(effect, () => {
+      resumeOnce();
+    });
+
+    // 3. Fallback safety timer in case onended doesn't fire
     const custom = this.customSounds[effect];
-    if (custom && custom.duration && !isNaN(custom.duration) && custom.duration > 0) {
-      const dur = Math.max(resumeDelayMs, (custom.duration * 1000) + 100);
-      this.pauseTimeoutId = window.setTimeout(() => {
-        this.pauseTimeoutId = null;
-        if (this.isBgmPlaying) {
-          this.resumeBGM();
-        }
-      }, dur);
-    } else {
-      // 4. Fallback timer: resume BGM after resumeDelayMs
-      this.pauseTimeoutId = window.setTimeout(() => {
-        this.pauseTimeoutId = null;
-        if (this.isBgmPlaying) {
-          this.resumeBGM();
-        }
-      }, resumeDelayMs);
-    }
+    const estimatedDur = (custom && custom.duration && !isNaN(custom.duration) && custom.duration > 0)
+      ? (custom.duration * 1000) + 150
+      : fallbackDelayMs;
+
+    this.pauseTimeoutId = window.setTimeout(() => {
+      resumeOnce();
+    }, estimatedDur);
   }
 
   /**
@@ -343,8 +349,11 @@ class AudioManager {
   /**
    * Play any game sound effect
    */
-  public play(effect: SoundEffect) {
-    if (this.isMuted) return;
+  public play(effect: SoundEffect, onEnded?: () => void) {
+    if (this.isMuted) {
+      if (onEnded) onEnded();
+      return;
+    }
     try {
       this.initContext();
 
@@ -354,9 +363,27 @@ class AudioManager {
         try {
           const clone = custom.cloneNode(true) as HTMLAudioElement;
           clone.volume = this.volume;
-          clone.play().catch(() => {
+          let endedFired = false;
+          const fireEndedOnce = () => {
+            if (!endedFired) {
+              endedFired = true;
+              if (onEnded) onEnded();
+            }
+          };
+
+          if (onEnded) {
+            clone.onended = fireEndedOnce;
+            clone.onerror = fireEndedOnce;
+          }
+
+          clone.play().then(() => {
+            // Safety backup timer if clone.duration is valid
+            if (onEnded && clone.duration && !isNaN(clone.duration) && clone.duration > 0) {
+              setTimeout(fireEndedOnce, (clone.duration * 1000) + 120);
+            }
+          }).catch(() => {
             // Fallback to synth if play promise is rejected
-            this.playSynthesized(effect);
+            this.playSynthesized(effect, onEnded);
           });
           return;
         } catch {
@@ -365,21 +392,43 @@ class AudioManager {
       }
 
       // Default: Procedural Web Audio Synth
-      this.playSynthesized(effect);
+      this.playSynthesized(effect, onEnded);
     } catch (e) {
       console.warn('Audio playback safely skipped:', e);
+      if (onEnded) onEnded();
     }
   }
 
   /**
    * Procedural Web Audio Synthesizer (Zero asset dependency)
    */
-  private playSynthesized(effect: SoundEffect) {
+  private playSynthesized(effect: SoundEffect, onEnded?: () => void) {
     try {
-      if (!this.ctx || this.isMuted) return;
+      if (!this.ctx || this.isMuted) {
+        if (onEnded) onEnded();
+        return;
+      }
       const now = this.ctx.currentTime;
       const masterGain = this.ctx.createGain();
       masterGain.gain.setValueAtTime(this.volume, now);
+      masterGain.connect(this.ctx.destination);
+
+      if (onEnded) {
+        const synthDurations: Record<SoundEffect, number> = {
+          start: 800,
+          flap: 180,
+          point: 320,
+          nearMiss: 280,
+          powerup: 450,
+          shieldBreak: 350,
+          rage: 480,
+          hit: 420,
+          gameover: 700,
+          winner: 850,
+        };
+        const dur = synthDurations[effect] || 400;
+        setTimeout(onEnded, dur);
+      }
       masterGain.connect(this.ctx.destination);
 
       switch (effect) {

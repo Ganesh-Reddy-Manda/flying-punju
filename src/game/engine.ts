@@ -42,6 +42,7 @@ export class GameEngine {
   // Loop & Timing
   private lastTime: number = 0;
   private animationFrameId: number | null = null;
+  private gameOverTimestamp: number = 0;
   private callbacks: GameEngineCallbacks;
 
   constructor(canvas: HTMLCanvasElement, callbacks: GameEngineCallbacks) {
@@ -104,7 +105,10 @@ export class GameEngine {
       this.player.flap(this.particles);
       audioManager.play('flap');
     } else if (this.state === 'GAMEOVER') {
-      this.restart();
+      // 600ms grace period to prevent accidental restart from trailing flap clicks on death
+      if (performance.now() - this.gameOverTimestamp > 600) {
+        this.restart();
+      }
     }
   }
 
@@ -328,10 +332,12 @@ export class GameEngine {
 
   private triggerGameOver() {
     this.state = 'GAMEOVER';
+    this.gameOverTimestamp = performance.now();
     this.screenShake = 14;
+    // Immediately stop background music - completely silent on game over screen
+    audioManager.stopBGM();
     audioManager.play('hit');
     audioManager.play('gameover');
-    audioManager.stopBGM();
     this.particles.spawnExplosion(this.player.x, this.player.y, '#f59e0b', 30);
     this.checkHighScore();
     this.callbacks.onStateChange(this.state);
