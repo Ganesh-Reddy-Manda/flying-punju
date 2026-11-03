@@ -23,6 +23,7 @@ class AudioManager {
   private isMuted: boolean = false;
   private volume: number = 0.8;
   private customSounds: Partial<Record<SoundEffect, HTMLAudioElement>> = {};
+  private customGameOverSounds: HTMLAudioElement[] = [];
   private customBgm: HTMLAudioElement | null = null;
   private isBgmPlaying: boolean = false;
   private isBgmPaused: boolean = false;
@@ -78,11 +79,26 @@ class AudioManager {
       audio.preload = 'auto';
       audio.oncanplaythrough = () => {
         this.customSounds[key] = audio;
+        if (key === 'gameover' && !this.customGameOverSounds.some((a) => a.src === audio.src)) {
+          this.customGameOverSounds.push(audio);
+        }
       };
       audio.onerror = () => {
         // Custom sound not found, will smoothly fall back to Web Audio synth
       };
     });
+
+    // Check for multiple numbered Game Over files: gameover1.mp3 through gameover10.mp3
+    for (let i = 1; i <= 10; i++) {
+      const gUrl = `${baseUrl}assets/sounds/gameover${i}.mp3`;
+      const gAudio = new Audio(gUrl);
+      gAudio.preload = 'auto';
+      gAudio.oncanplaythrough = () => {
+        if (!this.customGameOverSounds.some((a) => a.src === gAudio.src)) {
+          this.customGameOverSounds.push(gAudio);
+        }
+      };
+    }
 
     const bgm = new Audio(`${baseUrl}assets/sounds/bgm.mp3`);
     bgm.loop = true;
@@ -113,9 +129,33 @@ class AudioManager {
       return;
     }
 
+    if (type === 'gameover') {
+      this.addCustomGameOverAudio(sourceUrl);
+      return;
+    }
+
     const audio = new Audio(sourceUrl);
     audio.preload = 'auto';
     this.customSounds[type] = audio;
+  }
+
+  /**
+   * Add a custom Game Over audio clip to the random pool
+   */
+  public addCustomGameOverAudio(sourceUrl: string) {
+    const audio = new Audio(sourceUrl);
+    audio.preload = 'auto';
+    this.customGameOverSounds.push(audio);
+    this.customSounds['gameover'] = audio;
+  }
+
+  public getGameOverSoundsCount(): number {
+    return this.customGameOverSounds.length;
+  }
+
+  public clearCustomGameOverAudios() {
+    this.customGameOverSounds = [];
+    delete this.customSounds['gameover'];
   }
 
   public toggleMute(): boolean {
@@ -357,8 +397,13 @@ class AudioManager {
     try {
       this.initContext();
 
-      // Check if a custom audio element exists and is loaded
-      const custom = this.customSounds[effect];
+      // If effect is gameover and multiple custom audios exist, randomly select one every time!
+      let custom = this.customSounds[effect];
+      if (effect === 'gameover' && this.customGameOverSounds.length > 0) {
+        const randomIndex = Math.floor(Math.random() * this.customGameOverSounds.length);
+        custom = this.customGameOverSounds[randomIndex];
+      }
+
       if (custom) {
         try {
           const clone = custom.cloneNode(true) as HTMLAudioElement;
@@ -603,20 +648,74 @@ class AudioManager {
       }
 
       case 'gameover': {
-        // Low battlefield explosion rumble
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(140, now);
-        osc.frequency.exponentialRampToValueAtTime(28, now + 0.6);
+        // Randomly pick 1 of 3 comedic / dramatic defeat synth sound profiles!
+        const variant = Math.floor(Math.random() * 3);
 
-        gain.gain.setValueAtTime(0.5, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.65);
+        if (variant === 0) {
+          // Low battlefield explosion rumble with sub-bass drop
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(140, now);
+          osc.frequency.exponentialRampToValueAtTime(28, now + 0.65);
 
-        osc.connect(gain);
-        gain.connect(masterGain);
-        osc.start(now);
-        osc.stop(now + 0.65);
+          gain.gain.setValueAtTime(0.55, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.7);
+
+          osc.connect(gain);
+          gain.connect(masterGain);
+          osc.start(now);
+          osc.stop(now + 0.7);
+        } else if (variant === 1) {
+          // Sliding comedic trombone defeat ("Wah wah wah waaaah")
+          const notes = [311.13, 293.66, 277.18, 261.63]; // Eb4, D4, Db4, C4
+          notes.forEach((freq, idx) => {
+            if (!this.ctx) return;
+            const t = now + idx * 0.17;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(freq, t);
+            if (idx === 3) {
+              osc.frequency.linearRampToValueAtTime(freq * 0.7, t + 0.45);
+            }
+
+            gain.gain.setValueAtTime(0.32, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + (idx === 3 ? 0.5 : 0.15));
+
+            osc.connect(gain);
+            gain.connect(masterGain);
+            osc.start(t);
+            osc.stop(t + (idx === 3 ? 0.5 : 0.15));
+          });
+        } else {
+          // Rooster distress squawk + metal clash
+          const crow = this.ctx.createOscillator();
+          const crowGain = this.ctx.createGain();
+          crow.type = 'sawtooth';
+          crow.frequency.setValueAtTime(620, now);
+          crow.frequency.exponentialRampToValueAtTime(170, now + 0.38);
+
+          crowGain.gain.setValueAtTime(0.42, now);
+          crowGain.gain.exponentialRampToValueAtTime(0.01, now + 0.42);
+
+          crow.connect(crowGain);
+          crowGain.connect(masterGain);
+          crow.start(now);
+          crow.stop(now + 0.42);
+
+          const rumble = this.ctx.createOscillator();
+          const rGain = this.ctx.createGain();
+          rumble.type = 'triangle';
+          rumble.frequency.setValueAtTime(180, now + 0.08);
+          rumble.frequency.exponentialRampToValueAtTime(45, now + 0.6);
+          rGain.gain.setValueAtTime(0.4, now + 0.08);
+          rGain.gain.exponentialRampToValueAtTime(0.01, now + 0.65);
+          rumble.connect(rGain);
+          rGain.connect(masterGain);
+          rumble.start(now + 0.08);
+          rumble.stop(now + 0.65);
+        }
         break;
       }
 

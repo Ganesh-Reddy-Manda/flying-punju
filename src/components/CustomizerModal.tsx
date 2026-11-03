@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Play, CheckCircle, Eye, RefreshCw, Music, Shield, Zap, Flame, Award, Crosshair, ZoomIn } from 'lucide-react';
+import { X, Upload, Play, CheckCircle, Eye, RefreshCw, Music, Shield, Zap, Flame, Award, Crosshair, ZoomIn, Shuffle, Trash2 } from 'lucide-react';
 import { audioManager, SoundEffect } from '../game/audio';
 
 interface CustomizerModalProps {
@@ -21,6 +21,7 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'character' | 'sounds' | 'powers'>('character');
   const [uploadedSounds, setUploadedSounds] = useState<Record<string, boolean>>({});
+  const [gameOverSoundsCount, setGameOverSoundsCount] = useState<number>(() => audioManager.getGameOverSoundsCount());
   
   // Image & Circular Cropper State
   const [rawImageSrc, setRawImageSrc] = useState<string | null>(null);
@@ -209,6 +210,24 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
         audioManager.play(type as SoundEffect);
       }
     }
+  };
+
+  const handleMultipleGameOverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const url = URL.createObjectURL(file);
+        audioManager.addCustomGameOverAudio(url);
+      }
+      setGameOverSoundsCount(audioManager.getGameOverSoundsCount());
+      audioManager.play('gameover');
+    }
+  };
+
+  const handleClearGameOverSounds = () => {
+    audioManager.clearCustomGameOverAudios();
+    setGameOverSoundsCount(0);
   };
 
   const handleTestSound = (effect: SoundEffect) => {
@@ -438,6 +457,64 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
                   </div>
                 </div>
               ))}
+
+              {/* Special Card: MULTIPLE RANDOM GAME OVER AUDIOS */}
+              <div className="bg-gradient-to-r from-red-950/40 via-zinc-900/90 to-amber-950/30 border-2 border-amber-500/50 rounded-xl p-3.5 space-y-2.5 shadow-lg mt-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">💀</span>
+                    <div>
+                      <div className="font-extrabold text-xs text-amber-400 flex items-center gap-1.5">
+                        <span>Multiple Game Over Audios (Randomized)</span>
+                        <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-mono border border-amber-500/40">
+                          {gameOverSoundsCount > 0 ? `${gameOverSoundsCount} Custom Clips Loaded` : '3 Built-in Synth Variants'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-zinc-300 mt-0.5">
+                        Plays a <b>different random audio every time</b> you die or crash!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-950/80 p-2 rounded-lg border border-zinc-800 text-[11px] text-zinc-400 font-mono space-y-0.5">
+                  <div className="text-zinc-300 font-bold">📁 Files automatically loaded from:</div>
+                  <div className="text-amber-300">public/assets/sounds/gameover1.mp3</div>
+                  <div className="text-amber-300">public/assets/sounds/gameover2.mp3, gameover3.mp3, etc.</div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => audioManager.play('gameover')}
+                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow transition-all active:scale-95"
+                  >
+                    <Shuffle className="w-3.5 h-3.5" />
+                    <span>🎲 Test Random Game Over Sound</span>
+                  </button>
+
+                  <label className="cursor-pointer px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors border border-zinc-700 active:scale-95">
+                    <Upload className="w-3.5 h-3.5 text-amber-400" />
+                    <span>➕ Add MP3s</span>
+                    <input
+                      type="file"
+                      accept="audio/*"
+                      multiple
+                      className="hidden"
+                      onChange={handleMultipleGameOverUpload}
+                    />
+                  </label>
+
+                  {gameOverSoundsCount > 0 && (
+                    <button
+                      onClick={handleClearGameOverSounds}
+                      className="p-2 bg-red-950/60 hover:bg-red-900/80 text-red-300 rounded-lg text-xs font-semibold transition-colors border border-red-800/50 flex items-center justify-center"
+                      title="Clear custom clips"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
 
               {/* Background Music Slot */}
               <div className="bg-zinc-900/70 border border-zinc-800 rounded-xl p-3 flex items-center justify-between mt-2">
