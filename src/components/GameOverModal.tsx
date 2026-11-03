@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { RotateCcw, Share2, Trophy, Palette, Check } from 'lucide-react';
+import { audioManager } from '../game/audio';
 
 interface GameOverModalProps {
   score: number;
@@ -81,7 +82,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         <div className="flex flex-col gap-2.5">
           {/* Restart Button */}
           <button
-            onClick={onRestart}
+            onClick={() => {
+              audioManager.stopGameOverAudio();
+              onRestart();
+            }}
             className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-zinc-950 font-black py-3 px-6 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all text-base tracking-wider uppercase"
           >
             <RotateCcw className="w-5 h-5" />

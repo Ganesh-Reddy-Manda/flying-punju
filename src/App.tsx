@@ -41,6 +41,7 @@ export function App() {
   };
 
   const handleRestart = () => {
+    audioManager.stopGameOverAudio();
     engineRef.current?.restart();
   };
 

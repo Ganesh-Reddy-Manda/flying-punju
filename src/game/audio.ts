@@ -24,6 +24,8 @@ class AudioManager {
   private volume: number = 0.8;
   private customSounds: Partial<Record<SoundEffect, HTMLAudioElement>> = {};
   private customGameOverSounds: HTMLAudioElement[] = [];
+  private activeGameOverAudio: HTMLAudioElement | null = null;
+  private activeSounds: Set<HTMLAudioElement> = new Set();
   private customBgm: HTMLAudioElement | null = null;
   private isBgmPlaying: boolean = false;
   private isBgmPaused: boolean = false;
@@ -200,6 +202,37 @@ class AudioManager {
     delete this.customSounds['gameover'];
   }
 
+  /**
+   * Immediately stops any currently playing Game Over dialogue or defeat sound
+   */
+  public stopGameOverAudio() {
+    if (this.activeGameOverAudio) {
+      try {
+        this.activeGameOverAudio.pause();
+        this.activeGameOverAudio.currentTime = 0;
+      } catch {
+        // Ignore
+      }
+      this.activeGameOverAudio = null;
+    }
+  }
+
+  /**
+   * Immediately stops all currently playing sound effects
+   */
+  public stopAllSounds() {
+    this.stopGameOverAudio();
+    this.activeSounds.forEach((audio) => {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {
+        // Ignore
+      }
+    });
+    this.activeSounds.clear();
+  }
+
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
     try {
@@ -249,14 +282,10 @@ class AudioManager {
     this.isBgmPaused = false;
     this.initContext();
 
+    // Only play user's custom bgm.mp3 if provided
     if (this.customBgm && !this.isMuted) {
       this.customBgm.volume = this.volume * 0.5;
-      this.customBgm.play().catch(() => {
-        // Fallback to procedural synth BGM if custom file playback blocks
-        this.startProceduralBGM();
-      });
-    } else if (!this.isMuted) {
-      this.startProceduralBGM();
+      this.customBgm.play().catch(() => {});
     }
   }
 
@@ -274,11 +303,7 @@ class AudioManager {
 
     if (this.customBgm) {
       this.customBgm.volume = this.volume * 0.5;
-      this.customBgm.play().catch(() => {
-        this.startProceduralBGM();
-      });
-    } else if (this.bgmSynthTimer === null) {
-      this.startProceduralBGM();
+      this.customBgm.play().catch(() => {});
     }
   }
 
@@ -450,18 +475,27 @@ class AudioManager {
         try {
           const clone = custom.cloneNode(true) as HTMLAudioElement;
           clone.volume = this.volume;
+          this.activeSounds.add(clone);
+
+          if (effect === 'gameover') {
+            this.stopGameOverAudio();
+            this.activeGameOverAudio = clone;
+          }
+
           let endedFired = false;
           const fireEndedOnce = () => {
             if (!endedFired) {
               endedFired = true;
+              this.activeSounds.delete(clone);
+              if (this.activeGameOverAudio === clone) {
+                this.activeGameOverAudio = null;
+              }
               if (onEnded) onEnded();
             }
           };
 
-          if (onEnded) {
-            clone.onended = fireEndedOnce;
-            clone.onerror = fireEndedOnce;
-          }
+          clone.onended = fireEndedOnce;
+          clone.onerror = fireEndedOnce;
 
           clone.play().then(() => {
             // Safety backup timer if clone.duration is valid
@@ -469,17 +503,17 @@ class AudioManager {
               setTimeout(fireEndedOnce, (clone.duration * 1000) + 120);
             }
           }).catch(() => {
-            // Fallback to synth if play promise is rejected
-            this.playSynthesized(effect, onEnded);
+            fireEndedOnce();
           });
           return;
         } catch {
-          // Fallback to synth
+          if (onEnded) onEnded();
+          return;
         }
       }
 
-      // Default: Procedural Web Audio Synth
-      this.playSynthesized(effect, onEnded);
+      // Keep only user's sounds: If no custom MP3 is uploaded for this effect yet, remain silent!
+      if (onEnded) onEnded();
     } catch (e) {
       console.warn('Audio playback safely skipped:', e);
       if (onEnded) onEnded();

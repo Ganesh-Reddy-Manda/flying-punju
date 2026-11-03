@@ -136,6 +136,10 @@ export class GameEngine {
     this.particles.clear();
     this.screenShake = 0;
 
+    // Immediately stop any playing Game Over dialogue or defeat audio!
+    audioManager.stopGameOverAudio();
+    audioManager.stopAllSounds();
+
     this.callbacks.onStateChange(this.state);
     this.callbacks.onScoreUpdate(this.score, this.highScore, this.combo);
     this.callbacks.onPowerupUpdate(false, 0, 0);
